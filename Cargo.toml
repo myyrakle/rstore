@@ -9,8 +9,8 @@ keywords = []
 include = ["src/*", "Cargo.toml"]
 exclude = []
 readme = "README.md" 
-repository = "https://github.com/myyrakle/rrdb"
+repository = "https://github.com/myyrakle/rstore"
 documentation = "https://github.com/myyrakle/rstore/blob/master/README.md"
-homepage = "https://github.com/myyrakle/rrdb/blob/master/README.md"
+homepage = "https://github.com/myyrakle/rstore/blob/master/README.md"
 
 [dependencies]
