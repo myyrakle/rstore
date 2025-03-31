@@ -8,7 +8,7 @@ use axum::{
     extract::{Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::{get, post},
+    routing::{delete, get, post},
 };
 
 type KVData = Arc<Mutex<HashMap<String, String>>>;
@@ -21,6 +21,7 @@ async fn main() {
         .route("/", get(health_check))
         .route("/value", post(set_value))
         .route("/value", get(get_value))
+        .route("/value", delete(delete_value))
         .with_state(state);
 
     let addr = "0.0.0.0:3000";
@@ -79,5 +80,23 @@ async fn get_value(state: State<KVData>, Query(body): Query<GetValueRequest>) ->
             .status(StatusCode::NOT_FOUND)
             .body("Key not found".to_string())
             .unwrap()
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct DeleteValueRequest {
+    key: String,
+}
+
+async fn delete_value(
+    state: State<KVData>,
+    Query(body): Query<DeleteValueRequest>,
+) -> impl IntoResponse {
+    let mut state = state.lock().unwrap();
+
+    if state.remove(&body.key).is_some() {
+        StatusCode::NO_CONTENT
+    } else {
+        StatusCode::NOT_FOUND
     }
 }
