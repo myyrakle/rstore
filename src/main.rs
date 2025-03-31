@@ -5,7 +5,7 @@ use std::{
 
 use axum::{
     Json, Router,
-    extract::State,
+    extract::{Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::{get, post},
@@ -20,6 +20,7 @@ async fn main() {
     let app = Router::new()
         .route("/", get(health_check))
         .route("/value", post(set_value))
+        .route("/value", get(get_value))
         .with_state(state);
 
     let addr = "0.0.0.0:3000";
@@ -48,4 +49,35 @@ async fn set_value(state: State<KVData>, Json(body): Json<SetValueRequest>) -> i
     state.insert(body.key, body.value);
 
     StatusCode::NO_CONTENT
+}
+
+#[derive(serde::Deserialize)]
+struct GetValueRequest {
+    key: String,
+}
+
+#[derive(serde::Serialize)]
+struct GetValueResponse {
+    value: String,
+}
+
+async fn get_value(state: State<KVData>, Query(body): Query<GetValueRequest>) -> impl IntoResponse {
+    let state = state.lock().unwrap();
+
+    if let Some(value) = state.get(&body.key) {
+        Response::builder()
+            .status(StatusCode::OK)
+            .body(
+                serde_json::to_string(&GetValueResponse {
+                    value: value.clone(),
+                })
+                .unwrap_or_default(),
+            )
+            .unwrap()
+    } else {
+        Response::builder()
+            .status(StatusCode::NOT_FOUND)
+            .body("Key not found".to_string())
+            .unwrap()
+    }
 }
