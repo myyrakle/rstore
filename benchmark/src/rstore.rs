@@ -21,7 +21,6 @@ impl RStoreClient {
 impl KeyValueStore for RStoreClient {
     fn set_key_value(&mut self, key: &str, value: &str) -> anyhow::Result<()> {
         let request_body = format!("{{\"key\": \"{}\", \"value\": \"{}\"}}", key, value);
-        println!("Request body: {}", request_body);
 
         self.client
             .post("http://localhost:13535/value")
@@ -39,7 +38,6 @@ impl KeyValueStore for RStoreClient {
             .send()?;
 
         let response_body = response.text()?;
-        println!("Response body: {}", response_body);
 
         let response: RStoreGetResponse = serde_json::from_str(&response_body)?;
         let value = response.value;
