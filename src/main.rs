@@ -22,6 +22,7 @@ async fn main() {
         .route("/value", post(set_value))
         .route("/value", get(get_value))
         .route("/value", delete(delete_value))
+        .route("/clear", delete(clear_all))
         .with_state(state);
 
     let addr = "0.0.0.0:13535";
@@ -99,4 +100,12 @@ async fn delete_value(
     } else {
         StatusCode::NOT_FOUND
     }
+}
+
+async fn clear_all(state: State<KVData>) -> impl IntoResponse {
+    let mut state = state.lock().unwrap();
+
+    state.clear();
+
+    StatusCode::NO_CONTENT
 }
