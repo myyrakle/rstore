@@ -1,0 +1,20 @@
+services:
+  redis:
+    image: redis:7.0.11
+    ports:
+      - "16379:6379"
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1024M
+
+  rstore:
+    image: myyrakle/store 
+    ports:
+      - "13535:13535"
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1024M
