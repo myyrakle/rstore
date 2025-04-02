@@ -1,35 +1,44 @@
 use redis::{Commands, Connection};
 
-pub fn create_redis_client() -> anyhow::Result<Connection> {
-    // connect to redis
-    let client = redis::Client::open("redis://0.0.0.0:16379/")?;
-    let mut connection = client.get_connection()?;
+use crate::KeyValueStore;
 
-    let _: () = connection.ping()?;
-
-    Ok(connection)
+pub struct RedisClient {
+    pub connection: Connection,
 }
 
-pub fn set_key_value(connection: &mut Connection, key: &str, value: &str) -> anyhow::Result<()> {
-    // set key value
-    let _: () = connection.set(key, value)?;
+impl RedisClient {
+    pub fn new() -> anyhow::Result<RedisClient> {
+        // connect to redis
+        let client = redis::Client::open("redis://0.0.0.0:16379/")?;
+        let mut connection = client.get_connection()?;
 
-    Ok(())
+        let _: () = connection.ping()?;
+
+        Ok(RedisClient { connection })
+    }
 }
 
-pub fn get_key_value(connection: &mut Connection, key: &str) -> anyhow::Result<String> {
-    // get key value
-    let value: String = connection.get(key)?;
+impl KeyValueStore for RedisClient {
+    fn set_key_value(&mut self, key: &str, value: &str) -> anyhow::Result<()> {
+        // set key value
+        let _: () = self.connection.set(key, value)?;
 
-    Ok(value)
-}
-
-pub fn clear_all(connection: &mut Connection) -> anyhow::Result<()> {
-    // clear all
-    let all_keys: Vec<String> = connection.keys("*")?;
-    for key in all_keys {
-        let _: () = connection.del(key)?;
+        Ok(())
     }
 
-    Ok(())
+    fn get_key_value(&mut self, key: &str) -> anyhow::Result<String> {
+        let value: String = self.connection.get(key)?;
+
+        Ok(value)
+    }
+
+    fn clear_all(&mut self) -> anyhow::Result<()> {
+        // clear all
+        let all_keys: Vec<String> = self.connection.keys("*")?;
+        for key in all_keys {
+            let _: () = self.connection.del(key)?;
+        }
+
+        Ok(())
+    }
 }
