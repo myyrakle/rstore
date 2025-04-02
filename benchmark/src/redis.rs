@@ -1,9 +1,24 @@
+use std::sync::Arc;
+
 use redis::{Commands, Connection};
 
 use crate::KeyValueStore;
 
 pub struct RedisClient {
+    pub redis_client: Arc<redis::Client>,
     pub connection: Connection,
+}
+
+unsafe impl Send for RedisClient {}
+unsafe impl Sync for RedisClient {}
+
+impl Clone for RedisClient {
+    fn clone(&self) -> Self {
+        RedisClient {
+            redis_client: Arc::clone(&self.redis_client),
+            connection: self.redis_client.get_connection().unwrap(),
+        }
+    }
 }
 
 impl RedisClient {
@@ -14,7 +29,10 @@ impl RedisClient {
 
         let _: () = connection.ping()?;
 
-        Ok(RedisClient { connection })
+        Ok(RedisClient {
+            connection,
+            redis_client: Arc::new(client),
+        })
     }
 }
 

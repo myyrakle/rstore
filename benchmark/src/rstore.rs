@@ -2,6 +2,7 @@ use reqwest::blocking::Client;
 
 use crate::KeyValueStore;
 
+#[derive(Clone)]
 pub struct RStoreClient {
     pub client: Client,
 }
