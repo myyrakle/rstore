@@ -1,7 +1,4 @@
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
-};
+mod engine;
 
 use axum::{
     Json, Router,
@@ -10,12 +7,11 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{delete, get, post},
 };
-
-type KVData = Arc<Mutex<HashMap<String, String>>>;
+use engine::KVEngine;
 
 #[tokio::main]
 async fn main() {
-    let state = Arc::new(Mutex::new(HashMap::<String, String>::new()));
+    let engine = KVEngine::new();
 
     let app = Router::new()
         .route("/", get(health_check))
@@ -23,7 +19,7 @@ async fn main() {
         .route("/value", get(get_value))
         .route("/value", delete(delete_value))
         .route("/clear", delete(clear_all))
-        .with_state(state);
+        .with_state(engine);
 
     let addr = "0.0.0.0:13535";
     println!("Listening on {}", addr);
@@ -45,10 +41,15 @@ struct SetValueRequest {
     value: String,
 }
 
-async fn set_value(state: State<KVData>, Json(body): Json<SetValueRequest>) -> impl IntoResponse {
-    let mut state = state.lock().unwrap();
+async fn set_value(
+    engine: State<KVEngine>,
+    Json(body): Json<SetValueRequest>,
+) -> impl IntoResponse {
+    let result = engine.set_key_value(body.key, body.value);
 
-    state.insert(body.key, body.value);
+    if result.is_err() {
+        return StatusCode::INTERNAL_SERVER_ERROR;
+    }
 
     StatusCode::NO_CONTENT
 }
@@ -63,18 +64,14 @@ struct GetValueResponse {
     value: String,
 }
 
-async fn get_value(state: State<KVData>, Query(body): Query<GetValueRequest>) -> impl IntoResponse {
-    let state = state.lock().unwrap();
-
-    if let Some(value) = state.get(&body.key) {
+async fn get_value(
+    engine: State<KVEngine>,
+    Query(body): Query<GetValueRequest>,
+) -> impl IntoResponse {
+    if let Ok(value) = engine.get_key_value(&body.key) {
         Response::builder()
             .status(StatusCode::OK)
-            .body(
-                serde_json::to_string(&GetValueResponse {
-                    value: value.clone(),
-                })
-                .unwrap_or_default(),
-            )
+            .body(serde_json::to_string(&GetValueResponse { value: value }).unwrap_or_default())
             .unwrap()
     } else {
         Response::builder()
@@ -90,22 +87,27 @@ struct DeleteValueRequest {
 }
 
 async fn delete_value(
-    state: State<KVData>,
+    engine: State<KVEngine>,
     Query(body): Query<DeleteValueRequest>,
 ) -> impl IntoResponse {
-    let mut state = state.lock().unwrap();
+    let result = engine.delete_key_value(&body.key);
 
-    if state.remove(&body.key).is_some() {
-        StatusCode::NO_CONTENT
-    } else {
-        StatusCode::NOT_FOUND
+    match result {
+        Ok(_) => StatusCode::NO_CONTENT,
+        Err(error) => match error {
+            engine::KVError::KeyNotFound => StatusCode::NOT_FOUND,
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
+        },
     }
 }
 
-async fn clear_all(state: State<KVData>) -> impl IntoResponse {
-    let mut state = state.lock().unwrap();
+async fn clear_all(state: State<KVEngine>) -> impl IntoResponse {
+    let result = state.clear_all();
 
-    state.clear();
-
-    StatusCode::NO_CONTENT
+    match result {
+        Ok(_) => StatusCode::NO_CONTENT,
+        Err(error) => match error {
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
+        },
+    }
 }
