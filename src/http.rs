@@ -71,7 +71,7 @@ async fn get_value(
     if let Ok(value) = engine.get_key_value(&body.key) {
         Response::builder()
             .status(StatusCode::OK)
-            .body(serde_json::to_string(&GetValueResponse { value: value }).unwrap_or_default())
+            .body(serde_json::to_string(&GetValueResponse { value }).unwrap_or_default())
             .unwrap()
     } else {
         Response::builder()
@@ -106,8 +106,6 @@ async fn clear_all(state: State<KVEngine>) -> impl IntoResponse {
 
     match result {
         Ok(_) => StatusCode::NO_CONTENT,
-        Err(error) => match error {
-            _ => StatusCode::INTERNAL_SERVER_ERROR,
-        },
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
     }
 }
