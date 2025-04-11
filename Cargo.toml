@@ -23,3 +23,7 @@ thiserror = "2.0.12"
 [[bin]]
 name = "http"
 path = "./src/http.rs"
+
+[[bin]]
+name = "tcp"
+path = "./src/tcp.rs"
