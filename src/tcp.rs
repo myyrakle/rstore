@@ -173,8 +173,31 @@ async fn handle_stream(mut tcp_stream: TcpStream, engine: KVEngine) {
                     }
                     DELETE => {
                         println!("Received DELETE");
-                        // Handle DELETE
-                        // Parse key from buffer
+
+                        let start_packet = parse_start_packet(&read_buffer);
+
+                        match start_packet {
+                            Some(packet) => {
+                                if packet.length > PACKET_BYTE_LIMIT {
+                                    eprintln!("packet size exceeds limit");
+                                    let _ = tcp_stream.write(&[PACKET_INVALID]).await;
+                                    continue;
+                                }
+
+                                if packet.length > PAYLOAD_FIRST_MAX_VALUE_SIZE {
+                                    context_buffer.extend_from_slice(packet.value);
+                                    state = StreamStatus::DELETE(packet.length);
+
+                                    continue;
+                                }
+
+                                // Process the value
+                                process_delete(&mut tcp_stream, packet.value);
+                            }
+                            None => {
+                                let _ = tcp_stream.write(&[PACKET_INVALID]).await;
+                            }
+                        }
                     }
                     CLEAR => {
                         println!("Received CLEAR");
@@ -231,6 +254,25 @@ async fn handle_stream(mut tcp_stream: TcpStream, engine: KVEngine) {
             }
             StreamStatus::DELETE(_) => {
                 println!("Stream status: DELETE");
+
+                if read_buffer.len() == 0 {
+                    println!("No data received");
+                    state = StreamStatus::NONE;
+
+                    continue;
+                }
+
+                context_buffer.extend_from_slice(read_buffer);
+
+                if context_buffer.len() as u32 >= PAYLOAD_FIRST_MAX_VALUE_SIZE {
+                    // Process the value
+                    process_delete(&mut tcp_stream, &context_buffer);
+
+                    // Reset state
+                    state = StreamStatus::NONE;
+                } else {
+                    println!("Waiting for more data...");
+                }
             }
         }
     }
@@ -259,5 +301,9 @@ pub fn process_set(stream: &mut TcpStream, bytes: &[u8]) {
 }
 
 pub fn process_get(stream: &mut TcpStream, bytes: &[u8]) {
+    // TODO implement get
+}
+
+pub fn process_delete(stream: &mut TcpStream, bytes: &[u8]) {
     // TODO implement get
 }
