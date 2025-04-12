@@ -18,3 +18,12 @@ axum = "0.7"
 tokio = { version = "1.0", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+thiserror = "2.0.12"
+
+[[bin]]
+name = "http"
+path = "./src/http.rs"
+
+[[bin]]
+name = "tcp"
+path = "./src/tcp.rs"
