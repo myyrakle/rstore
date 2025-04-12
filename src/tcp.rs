@@ -1,51 +1,44 @@
-use std::sync::Arc;
-
 use engine::KVEngine;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
-    net::{TcpStream, tcp},
+    net::TcpStream,
 };
 
 mod engine;
 
 // Redis - 512MB (Key, Value)
 // Memcached - 1MB (Key, Value)
-const KEY_BYTE_LIMIT: u32 = 1024 * 1024; // 1MB
-const VALUE_BYTE_LIMIT: u32 = 1024 * 1024 * 10; // 10MB
-const PACKET_BYTE_LIMIT: u32 = 1024 * 1024 * 20; // 20MB
+pub const KEY_BYTE_LIMIT: u32 = 1024 * 1024; // 1MB
+pub const VALUE_BYTE_LIMIT: u32 = 1024 * 1024 * 10; // 10MB
+pub const PACKET_BYTE_LIMIT: u32 = 1024 * 1024 * 20; // 20MB
 
 const PAYLOAD_CHUNK_SIZE: u32 = 1024; // 1KB
 const PAYLOAD_HEAD_SIZE: u32 = 5; // Tag 1 Byte + Length 4 Bytes
 const PAYLOAD_FIRST_MAX_VALUE_SIZE: u32 = PAYLOAD_CHUNK_SIZE - PAYLOAD_HEAD_SIZE; // 1KB - 5 Bytes
 
 // Request Tag - Start Byte
-const PING: u8 = 0x01;
-const SET: u8 = 0x02;
-const GET: u8 = 0x03;
-const DELETE: u8 = 0x04;
-const CLEAR: u8 = 0x05;
+pub const PING: u8 = 0x01;
+pub const SET: u8 = 0x02;
+pub const GET: u8 = 0x03;
+pub const DELETE: u8 = 0x04;
+pub const CLEAR: u8 = 0x05;
 
 // Response Tag - Start Byte
-const PONG: u8 = 0x01;
-const SET_OK: u8 = 0x02;
-const GET_OK: u8 = 0x03;
-const DELETE_OK: u8 = 0x04;
-const CLEAR_OK: u8 = 0x05;
-const PACKET_INVALID: u8 = 0xFE;
-const ERROR: u8 = 0xFF;
+pub const PONG: u8 = 0x01;
+pub const SET_OK: u8 = 0x02;
+pub const GET_OK: u8 = 0x03;
+pub const DELETE_OK: u8 = 0x04;
+pub const CLEAR_OK: u8 = 0x05;
+pub const PACKET_INVALID: u8 = 0xFE;
+pub const ERROR: u8 = 0xFF;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum StreamStatus {
+    #[default]
     NONE,
     SET(u32),
     GET(u32),
     DELETE(u32),
-}
-
-impl Default for StreamStatus {
-    fn default() -> Self {
-        StreamStatus::NONE
-    }
 }
 
 #[tokio::main]
@@ -120,7 +113,7 @@ async fn handle_stream(mut tcp_stream: TcpStream, engine: KVEngine) {
                     SET => {
                         println!("Received SET");
 
-                        let start_packet = parse_start_packet(&read_buffer);
+                        let start_packet = parse_start_packet(read_buffer);
 
                         match start_packet {
                             Some(packet) => {
@@ -147,7 +140,7 @@ async fn handle_stream(mut tcp_stream: TcpStream, engine: KVEngine) {
                     GET => {
                         println!("Received GET");
 
-                        let start_packet = parse_start_packet(&read_buffer);
+                        let start_packet = parse_start_packet(read_buffer);
 
                         match start_packet {
                             Some(packet) => {
@@ -174,7 +167,7 @@ async fn handle_stream(mut tcp_stream: TcpStream, engine: KVEngine) {
                     DELETE => {
                         println!("Received DELETE");
 
-                        let start_packet = parse_start_packet(&read_buffer);
+                        let start_packet = parse_start_packet(read_buffer);
 
                         match start_packet {
                             Some(packet) => {
@@ -211,7 +204,7 @@ async fn handle_stream(mut tcp_stream: TcpStream, engine: KVEngine) {
             StreamStatus::SET(length) => {
                 println!("Stream status: SET");
 
-                if read_buffer.len() == 0 {
+                if read_buffer.is_empty() {
                     println!("No data received");
                     state = StreamStatus::NONE;
 
@@ -233,7 +226,7 @@ async fn handle_stream(mut tcp_stream: TcpStream, engine: KVEngine) {
             StreamStatus::GET(_) => {
                 println!("Stream status: GET");
 
-                if read_buffer.len() == 0 {
+                if read_buffer.is_empty() {
                     println!("No data received");
                     state = StreamStatus::NONE;
 
@@ -255,7 +248,7 @@ async fn handle_stream(mut tcp_stream: TcpStream, engine: KVEngine) {
             StreamStatus::DELETE(_) => {
                 println!("Stream status: DELETE");
 
-                if read_buffer.len() == 0 {
+                if read_buffer.is_empty() {
                     println!("No data received");
                     state = StreamStatus::NONE;
 
@@ -284,7 +277,7 @@ pub struct StartPacket<'a> {
     pub value: &'a [u8],
 }
 
-pub fn parse_start_packet<'a>(packet: &'a [u8]) -> Option<StartPacket<'a>> {
+pub fn parse_start_packet(packet: &[u8]) -> Option<StartPacket<'_>> {
     if packet.len() < 5 {
         return None;
     }
