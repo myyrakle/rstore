@@ -3,15 +3,8 @@ pub mod protocol;
 extern crate serde;
 use rstore::{
     client::{ClientResult, ConnectionConfig, RStoreClient},
-    protocol::GetRequest,
+    protocol::{GetRequest, SetRequest},
 };
-use serde::Serialize;
-
-#[derive(Serialize)]
-pub struct Foo {
-    pub user_id: String,
-    pub user_name: String,
-}
 
 #[tokio::main]
 async fn main() -> ClientResult<()> {
@@ -21,13 +14,25 @@ async fn main() -> ClientResult<()> {
         ..Default::default()
     });
 
-    let response = client
-        .get(GetRequest {
-            key: "key".to_string(),
-        })
-        .await?;
+    client.connect().await?;
 
-    println!("Response: {:?}", response);
+    let _ = client.ping().await?;
+    println!("PING PONG");
+
+    // let _ = client
+    //     .set(SetRequest {
+    //         key: "key".to_string(),
+    //         value: "value".to_string(),
+    //     })
+    //     .await?;
+
+    // let response = client
+    //     .get(GetRequest {
+    //         key: "key".to_string(),
+    //     })
+    //     .await?;
+
+    // println!("Response: {:?}", response);
 
     Ok(())
 }

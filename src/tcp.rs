@@ -75,7 +75,7 @@ async fn handle_stream(mut tcp_stream: TcpStream, mut engine: KVEngine) {
             StreamStatus::NONE => {
                 if size == 0 {
                     println!("No data received");
-                    continue;
+                    return;
                 }
 
                 println!("Received {:?} bytes", read_buffer);

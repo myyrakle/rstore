@@ -100,13 +100,16 @@ impl RStoreClient {
         Ok(pooled_connection)
     }
 
-    pub async fn connect(&mut self) -> ClientResult<()> {
-        let mut pool = self.connection_pool.lock().unwrap();
+    pub async fn connect(&self) -> ClientResult<()> {
+        let connection_count = { self.connection_pool.lock().unwrap().connection_count };
 
-        if pool.connection_count == 0 {
+        if connection_count == 0 {
             let new_connection = self.create_connection().await?;
 
-            pool.connections.push(new_connection);
+            {
+                let mut pool = self.connection_pool.lock().unwrap();
+                pool.connections.push(new_connection);
+            }
         }
 
         Ok(())
@@ -114,22 +117,31 @@ impl RStoreClient {
 
     pub async fn get_connection_or_wait(&self) -> ClientResult<PooledConnection> {
         loop {
-            let mut pool = self.connection_pool.lock().unwrap();
+            let (connections_is_empty, connection_count) = {
+                let pool = self.connection_pool.lock().unwrap();
+                let connection_count = pool.connection_count;
+                let connections_is_empty = pool.connections.is_empty();
+                (connections_is_empty, connection_count)
+            };
 
-            if pool.connections.is_empty()
-                && pool.connection_count < self.connection_config.max_connections
-            {
+            if connections_is_empty && connection_count < self.connection_config.max_connections {
                 let new_connection = self.create_connection().await?;
                 return Ok(new_connection);
             }
 
             // Remove the connection from the pool if it's not valid
-            pool.connections
-                .retain(|c| c.tcp_stream.peer_addr().is_ok());
+            {
+                let mut pool = self.connection_pool.lock().unwrap();
+                pool.connections
+                    .retain(|c| c.tcp_stream.peer_addr().is_ok());
+                pool.connection_count = pool.connections.len() as u32;
 
-            if let Some(connection) = pool.connections.pop() {
-                return Ok(connection);
+                if let Some(connection) = pool.connections.pop() {
+                    return Ok(connection);
+                }
             }
+
+            std::thread::sleep(Duration::from_millis(100));
 
             // TODO: cancel with timeout
         }
@@ -138,7 +150,7 @@ impl RStoreClient {
     pub async fn ping(&self) -> ClientResult<()> {
         let mut connection = self.get_connection_or_wait().await?;
 
-        let _ = request_ping(&mut connection.tcp_stream).await;
+        let _ = request_ping(&mut connection.tcp_stream).await?;
 
         connection.release_to_pool();
 
