@@ -19,12 +19,12 @@ async fn main() -> ClientResult<()> {
     let _ = client.ping().await?;
     println!("PING PONG");
 
-    // let _ = client
-    //     .set(SetRequest {
-    //         key: "key".to_string(),
-    //         value: "value".to_string(),
-    //     })
-    //     .await?;
+    let _ = client
+        .set(SetRequest {
+            key: "key".to_string(),
+            value: "value".to_string(),
+        })
+        .await?;
 
     // let response = client
     //     .get(GetRequest {

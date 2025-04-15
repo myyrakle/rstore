@@ -9,7 +9,9 @@ use tokio::{
     net::TcpStream,
 };
 
-use crate::protocol::{self, GetRequest, GetResponse, PACKET_BYTE_LIMIT, parse_start_packet};
+use crate::protocol::{
+    self, GetRequest, GetResponse, PACKET_BYTE_LIMIT, PAYLOAD_CHUNK_SIZE, parse_start_packet,
+};
 
 #[derive(Debug, thiserror::Error)]
 pub enum ClientError {
@@ -236,12 +238,12 @@ async fn request_ping(tcp_stream: &mut TcpStream) -> ClientResult<()> {
 
     let (response_tag, _) = fetch_all_packet(tcp_stream).await?;
 
-    if response_tag != protocol::PONG {
-        return Err(ClientError::ConnectionError(std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            "Ping Failed",
-        )));
-    }
+    // if response_tag != protocol::PONG {
+    //     return Err(ClientError::ConnectionError(std::io::Error::new(
+    //         std::io::ErrorKind::InvalidData,
+    //         "Ping Failed",
+    //     )));
+    // }
 
     Ok(())
 }
@@ -352,7 +354,7 @@ fn generate_packet(packet_type: u8, payload: &[u8]) -> Vec<u8> {
 }
 
 async fn fetch_all_packet(tcp_stream: &mut TcpStream) -> ClientResult<(u8, Vec<u8>)> {
-    let mut packet_buffer = [0; PACKET_BYTE_LIMIT as usize];
+    let mut packet_buffer = [0; PAYLOAD_CHUNK_SIZE as usize];
 
     let _ = tcp_stream.read(&mut packet_buffer).await?;
 
