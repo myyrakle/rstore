@@ -1,4 +1,4 @@
-use chorba::{Decode, Encode, decode};
+use chorba::{Decode, decode};
 use engine::KVEngine;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -186,7 +186,7 @@ async fn handle_stream(mut tcp_stream: TcpStream, mut engine: KVEngine) {
                                 }
 
                                 // Process the value
-                                process_delete(&mut tcp_stream, &mut engine, packet.value);
+                                process_delete(&mut tcp_stream, &mut engine, packet.value).await;
                             }
                             None => {
                                 let _ = tcp_stream.write(&[PACKET_INVALID]).await;
@@ -260,7 +260,7 @@ async fn handle_stream(mut tcp_stream: TcpStream, mut engine: KVEngine) {
 
                 if context_buffer.len() as u32 >= PAYLOAD_FIRST_MAX_VALUE_SIZE {
                     // Process the value
-                    process_delete(&mut tcp_stream, &mut engine, &context_buffer);
+                    process_delete(&mut tcp_stream, &mut engine, &context_buffer).await;
 
                     // Reset state
                     state = StreamStatus::NONE;
@@ -347,6 +347,21 @@ pub async fn process_get(stream: &mut TcpStream, engine: &mut KVEngine, bytes: &
     }
 }
 
-pub fn process_delete(stream: &mut TcpStream, engine: &mut KVEngine, bytes: &[u8]) {
-    // TODO implement get
+pub async fn process_delete(stream: &mut TcpStream, engine: &mut KVEngine, bytes: &[u8]) {
+    let decode_result = decode::<GetRequest>(bytes);
+
+    let get_request = match decode_result {
+        Ok(get_request) => get_request,
+        Err(error) => {
+            eprintln!("Failed to decode GetRequest: {}", error);
+            let _ = stream.write(&[PACKET_INVALID]).await;
+            return;
+        }
+    };
+
+    let key = get_request.key;
+    if let Err(error) = engine.delete_key_value(&key) {
+        eprintln!("Failed to delete key-value pair: {}", error);
+        let _ = stream.write(&[ERROR]).await;
+    }
 }
