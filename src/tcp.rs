@@ -1,8 +1,9 @@
 use chorba::decode;
 use engine::KVEngine;
 use protocol::{
-    CLEAR, DELETE, ERROR, GET, GET_OK, GetRequest, PACKET_BYTE_LIMIT, PACKET_INVALID,
-    PAYLOAD_CHUNK_SIZE, PAYLOAD_FIRST_MAX_VALUE_SIZE, PING, PONG, SET, SetRequest,
+    CLEAR, DELETE, DeleteRequest, ERROR, GET, GET_OK, GetRequest, PACKET_BYTE_LIMIT,
+    PACKET_INVALID, PAYLOAD_CHUNK_SIZE, PAYLOAD_FIRST_MAX_VALUE_SIZE, PING, PONG, SET, SetRequest,
+    parse_start_packet,
 };
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -256,24 +257,6 @@ async fn handle_stream(mut tcp_stream: TcpStream, mut engine: KVEngine) {
     }
 }
 
-pub struct StartPacket<'a> {
-    pub tag: u8,
-    pub length: u32,
-    pub value: &'a [u8],
-}
-
-pub fn parse_start_packet(packet: &[u8]) -> Option<StartPacket<'_>> {
-    if packet.len() < 5 {
-        return None;
-    }
-
-    let tag = packet[0];
-    let length = u32::from_be_bytes([packet[1], packet[2], packet[3], packet[4]]);
-    let value = &packet[5..];
-
-    Some(StartPacket { tag, length, value })
-}
-
 pub async fn process_set(stream: &mut TcpStream, engine: &mut KVEngine, bytes: &[u8]) {
     let decode_result = decode::<SetRequest>(bytes);
 
@@ -321,7 +304,7 @@ pub async fn process_get(stream: &mut TcpStream, engine: &mut KVEngine, bytes: &
 }
 
 pub async fn process_delete(stream: &mut TcpStream, engine: &mut KVEngine, bytes: &[u8]) {
-    let decode_result = decode::<GetRequest>(bytes);
+    let decode_result = decode::<DeleteRequest>(bytes);
 
     let get_request = match decode_result {
         Ok(get_request) => get_request,
