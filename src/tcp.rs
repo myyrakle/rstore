@@ -158,7 +158,7 @@ async fn handle_stream(mut tcp_stream: TcpStream, mut engine: KVEngine) {
                                     continue;
                                 }
 
-                                process_get(&mut tcp_stream, &mut engine, packet.value);
+                                process_get(&mut tcp_stream, &mut engine, packet.value).await;
                             }
                             None => {
                                 let _ = tcp_stream.write(&[PACKET_INVALID]).await;
@@ -238,7 +238,7 @@ async fn handle_stream(mut tcp_stream: TcpStream, mut engine: KVEngine) {
 
                 if context_buffer.len() as u32 >= PAYLOAD_FIRST_MAX_VALUE_SIZE {
                     // Process the value
-                    process_get(&mut tcp_stream, &mut engine, &context_buffer);
+                    process_get(&mut tcp_stream, &mut engine, &context_buffer).await;
 
                     // Reset state
                     state = StreamStatus::NONE;
@@ -316,8 +316,35 @@ pub async fn process_set(stream: &mut TcpStream, engine: &mut KVEngine, bytes: &
     }
 }
 
-pub fn process_get(stream: &mut TcpStream, engine: &mut KVEngine, bytes: &[u8]) {
-    // TODO implement get
+#[derive(Decode)]
+pub struct GetRequest {
+    pub key: String,
+}
+
+pub async fn process_get(stream: &mut TcpStream, engine: &mut KVEngine, bytes: &[u8]) {
+    let decode_result = decode::<GetRequest>(bytes);
+
+    let get_request = match decode_result {
+        Ok(get_request) => get_request,
+        Err(error) => {
+            eprintln!("Failed to decode GetRequest: {}", error);
+            let _ = stream.write(&[PACKET_INVALID]).await;
+            return;
+        }
+    };
+
+    let key = get_request.key;
+    match engine.get_key_value(&key) {
+        Ok(value) => {
+            // Send the value back to the client
+            let response = [GET_OK, value.len() as u8].to_vec();
+            stream.write_all(&response).await.unwrap();
+        }
+        Err(error) => {
+            eprintln!("Failed to get key-value pair: {}", error);
+            let _ = stream.write(&[ERROR]).await;
+        }
+    }
 }
 
 pub fn process_delete(stream: &mut TcpStream, engine: &mut KVEngine, bytes: &[u8]) {
