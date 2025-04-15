@@ -1,46 +1,17 @@
-use chorba::{Decode, decode};
+use chorba::decode;
 use engine::KVEngine;
+use protocol::{
+    CLEAR, DELETE, DeleteRequest, ERROR, GET, GET_OK, GetRequest, PACKET_BYTE_LIMIT,
+    PACKET_INVALID, PAYLOAD_CHUNK_SIZE, PAYLOAD_FIRST_MAX_VALUE_SIZE, PING, PONG, SET, SetRequest,
+    parse_start_packet,
+};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpStream,
 };
 
 mod engine;
-
-// Redis - 512MB (Key, Value)
-// Memcached - 1MB (Key, Value)
-pub const KEY_BYTE_LIMIT: u32 = 1024 * 1024; // 1MB
-pub const VALUE_BYTE_LIMIT: u32 = 1024 * 1024 * 10; // 10MB
-pub const PACKET_BYTE_LIMIT: u32 = 1024 * 1024 * 20; // 20MB
-
-const PAYLOAD_CHUNK_SIZE: u32 = 1024; // 1KB
-const PAYLOAD_HEAD_SIZE: u32 = 5; // Tag 1 Byte + Length 4 Bytes
-const PAYLOAD_FIRST_MAX_VALUE_SIZE: u32 = PAYLOAD_CHUNK_SIZE - PAYLOAD_HEAD_SIZE; // 1KB - 5 Bytes
-
-// Request Tag - Start Byte
-pub const PING: u8 = 0x01;
-pub const SET: u8 = 0x02;
-pub const GET: u8 = 0x03;
-pub const DELETE: u8 = 0x04;
-pub const CLEAR: u8 = 0x05;
-
-// Response Tag - Start Byte
-pub const PONG: u8 = 0x01;
-pub const SET_OK: u8 = 0x02;
-pub const GET_OK: u8 = 0x03;
-pub const DELETE_OK: u8 = 0x04;
-pub const CLEAR_OK: u8 = 0x05;
-pub const PACKET_INVALID: u8 = 0xFE;
-pub const ERROR: u8 = 0xFF;
-
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
-pub enum StreamStatus {
-    #[default]
-    NONE,
-    SET(u32),
-    GET(u32),
-    DELETE(u32),
-}
+mod protocol;
 
 #[tokio::main]
 async fn main() {
@@ -66,6 +37,15 @@ async fn main() {
             eprintln!("Failed to accept connection");
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum StreamStatus {
+    #[default]
+    NONE,
+    SET(u32),
+    GET(u32),
+    DELETE(u32),
 }
 
 async fn handle_stream(mut tcp_stream: TcpStream, mut engine: KVEngine) {
@@ -277,30 +257,6 @@ async fn handle_stream(mut tcp_stream: TcpStream, mut engine: KVEngine) {
     }
 }
 
-pub struct StartPacket<'a> {
-    pub tag: u8,
-    pub length: u32,
-    pub value: &'a [u8],
-}
-
-pub fn parse_start_packet(packet: &[u8]) -> Option<StartPacket<'_>> {
-    if packet.len() < 5 {
-        return None;
-    }
-
-    let tag = packet[0];
-    let length = u32::from_be_bytes([packet[1], packet[2], packet[3], packet[4]]);
-    let value = &packet[5..];
-
-    Some(StartPacket { tag, length, value })
-}
-
-#[derive(Decode)]
-pub struct SetRequest {
-    pub key: String,
-    pub value: String,
-}
-
 pub async fn process_set(stream: &mut TcpStream, engine: &mut KVEngine, bytes: &[u8]) {
     let decode_result = decode::<SetRequest>(bytes);
 
@@ -319,11 +275,6 @@ pub async fn process_set(stream: &mut TcpStream, engine: &mut KVEngine, bytes: &
         eprintln!("Failed to set key-value pair: {}", error);
         let _ = stream.write(&[ERROR]).await;
     }
-}
-
-#[derive(Decode)]
-pub struct GetRequest {
-    pub key: String,
 }
 
 pub async fn process_get(stream: &mut TcpStream, engine: &mut KVEngine, bytes: &[u8]) {
@@ -353,7 +304,7 @@ pub async fn process_get(stream: &mut TcpStream, engine: &mut KVEngine, bytes: &
 }
 
 pub async fn process_delete(stream: &mut TcpStream, engine: &mut KVEngine, bytes: &[u8]) {
-    let decode_result = decode::<GetRequest>(bytes);
+    let decode_result = decode::<DeleteRequest>(bytes);
 
     let get_request = match decode_result {
         Ok(get_request) => get_request,
