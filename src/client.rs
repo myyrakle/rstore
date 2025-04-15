@@ -145,7 +145,7 @@ impl RStoreClient {
     pub async fn set(&self, request: protocol::SetRequest) -> ClientResult<()> {
         let mut connection = self.get_connection_or_wait().await?;
 
-        let _ = request_set(&mut connection.tcp_stream, request).await;
+        let _ = request_set(&mut connection.tcp_stream, request).await?;
 
         connection.release_to_pool();
 
@@ -155,7 +155,17 @@ impl RStoreClient {
     pub async fn delete(&self, request: protocol::DeleteRequest) -> ClientResult<()> {
         let mut connection = self.get_connection_or_wait().await?;
 
-        let _ = request_delete(&mut connection.tcp_stream, request).await;
+        let _ = request_delete(&mut connection.tcp_stream, request).await?;
+
+        connection.release_to_pool();
+
+        Ok(())
+    }
+
+    pub async fn clear(&self) -> ClientResult<()> {
+        let mut connection = self.get_connection_or_wait().await?;
+
+        let _ = request_clear(&mut connection.tcp_stream).await?;
 
         connection.release_to_pool();
 
@@ -272,6 +282,25 @@ async fn request_delete(
     let (response_tag, _) = fetch_all_packet(tcp_stream).await?;
 
     if response_tag != protocol::DELETE_OK {
+        return Err(ClientError::ConnectionError(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "Invalid response tag",
+        )));
+    }
+
+    Ok(())
+}
+
+async fn request_clear(tcp_stream: &mut TcpStream) -> ClientResult<()> {
+    let request_bytes = vec![];
+
+    let request_packet = generate_packet(protocol::CLEAR, &request_bytes);
+
+    tcp_stream.write(&request_packet).await?;
+
+    let (response_tag, _) = fetch_all_packet(tcp_stream).await?;
+
+    if response_tag != protocol::CLEAR_OK {
         return Err(ClientError::ConnectionError(std::io::Error::new(
             std::io::ErrorKind::InvalidData,
             "Invalid response tag",
