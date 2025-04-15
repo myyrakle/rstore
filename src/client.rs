@@ -36,6 +36,19 @@ const MAX_CONNECTION_DEFAULT: u32 = 10;
 const CONNECTION_TIMEOUT_DEFAULT: Duration = Duration::from_secs(30);
 const IDLE_TIMEOUT_DEFAULT: Duration = Duration::from_secs(60);
 
+impl Default for ConnectionConfig {
+    fn default() -> Self {
+        Self {
+            min_connections: MIN_CONNECTION_DEFAULT,
+            max_connections: MAX_CONNECTION_DEFAULT,
+            connection_timeout: CONNECTION_TIMEOUT_DEFAULT,
+            idle_timeout: IDLE_TIMEOUT_DEFAULT,
+            host: "".into(),
+            port: 0,
+        }
+    }
+}
+
 impl ConnectionConfig {
     pub fn new(host: String, port: u16) -> Self {
         Self {

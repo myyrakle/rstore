@@ -11,7 +11,7 @@ use tokio::{
 };
 
 mod engine;
-mod protocol;
+pub mod protocol;
 
 #[tokio::main]
 async fn main() {

@@ -38,23 +38,23 @@ pub const NO_VALUE_TAGS: [u8; 9] = [
     ERROR,
 ];
 
-#[derive(Decode, Encode)]
+#[derive(Decode, Encode, Debug, Clone)]
 pub struct SetRequest {
     pub key: String,
     pub value: String,
 }
 
-#[derive(Decode, Encode)]
+#[derive(Decode, Encode, Debug, Clone)]
 pub struct GetRequest {
     pub key: String,
 }
 
-#[derive(Decode, Encode)]
+#[derive(Decode, Encode, Debug, Clone)]
 pub struct GetResponse {
     pub value: String,
 }
 
-#[derive(Decode, Encode)]
+#[derive(Decode, Encode, Debug, Clone)]
 pub struct DeleteRequest {
     pub key: String,
 }
@@ -65,6 +65,7 @@ pub struct StartPacket<'a> {
     pub value: &'a [u8],
 }
 
+#[allow(dead_code)]
 pub(crate) fn parse_start_packet(packet: &[u8]) -> Option<StartPacket<'_>> {
     if packet.len() < 5 {
         return None;
