@@ -195,7 +195,12 @@ async fn handle_stream(mut tcp_stream: TcpStream, mut engine: KVEngine) {
                     }
                     CLEAR => {
                         println!("Received CLEAR");
-                        // Handle CLEAR
+
+                        if let Err(error) = engine.clear_all() {
+                            eprintln!("Failed to clear all key-value pairs: {}", error);
+                            let _ = tcp_stream.write(&[ERROR]).await;
+                            continue;
+                        }
                     }
                     _ => {
                         eprintln!("Unknown command: {}", first_byte);
