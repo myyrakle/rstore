@@ -1,9 +1,9 @@
 use chorba::decode;
 use engine::KVEngine;
 use protocol::{
-    CLEAR, DELETE, DeleteRequest, ERROR, GET, GET_OK, GetRequest, PACKET_BYTE_LIMIT,
-    PACKET_INVALID, PAYLOAD_CHUNK_SIZE, PAYLOAD_FIRST_MAX_VALUE_SIZE, PING, PONG, SET, SET_OK,
-    SetRequest, generate_packet, parse_start_packet,
+    CLEAR, CLEAR_OK, DELETE, DELETE_OK, DeleteRequest, ERROR, GET, GET_OK, GetRequest,
+    PACKET_BYTE_LIMIT, PACKET_INVALID, PAYLOAD_CHUNK_SIZE, PAYLOAD_FIRST_MAX_VALUE_SIZE, PING,
+    PONG, SET, SET_OK, SetRequest, generate_packet, parse_start_packet,
 };
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -181,6 +181,9 @@ async fn handle_stream(mut tcp_stream: TcpStream, mut engine: KVEngine) {
                             let _ = tcp_stream.write(&[ERROR]).await;
                             continue;
                         }
+
+                        // Send a response back to the client
+                        let _ = tcp_stream.write_all(&[CLEAR_OK]).await;
                     }
                     _ => {
                         eprintln!("Unknown command: {}", first_byte);
@@ -323,4 +326,7 @@ pub async fn process_delete(stream: &mut TcpStream, engine: &mut KVEngine, bytes
         eprintln!("Failed to delete key-value pair: {}", error);
         let _ = stream.write(&[ERROR]).await;
     }
+
+    // Send a response back to the client
+    let _ = stream.write_all(&[DELETE_OK]).await;
 }
