@@ -2,8 +2,8 @@ use chorba::decode;
 use engine::KVEngine;
 use protocol::{
     CLEAR, DELETE, DeleteRequest, ERROR, GET, GET_OK, GetRequest, PACKET_BYTE_LIMIT,
-    PACKET_INVALID, PAYLOAD_CHUNK_SIZE, PAYLOAD_FIRST_MAX_VALUE_SIZE, PING, PONG, SET, SetRequest,
-    parse_start_packet,
+    PACKET_INVALID, PAYLOAD_CHUNK_SIZE, PAYLOAD_FIRST_MAX_VALUE_SIZE, PING, PONG, SET, SET_OK,
+    SetRequest, generate_packet, parse_start_packet,
 };
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -275,6 +275,9 @@ pub async fn process_set(stream: &mut TcpStream, engine: &mut KVEngine, bytes: &
         eprintln!("Failed to set key-value pair: {}", error);
         let _ = stream.write(&[ERROR]).await;
     }
+
+    // Send a response back to the client
+    let _ = stream.write_all(&[SET_OK]).await;
 }
 
 pub async fn process_get(stream: &mut TcpStream, engine: &mut KVEngine, bytes: &[u8]) {
@@ -293,8 +296,8 @@ pub async fn process_get(stream: &mut TcpStream, engine: &mut KVEngine, bytes: &
     match engine.get_key_value(&key) {
         Ok(value) => {
             // Send the value back to the client
-            let response = [GET_OK, value.len() as u8].to_vec();
-            stream.write_all(&response).await.unwrap();
+            let response = generate_packet(GET_OK, value.as_bytes());
+            let _ = stream.write_all(&response).await;
         }
         Err(error) => {
             eprintln!("Failed to get key-value pair: {}", error);

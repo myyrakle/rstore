@@ -86,3 +86,19 @@ pub(crate) fn parse_start_packet(packet: &[u8]) -> Option<StartPacket<'_>> {
 
     Some(StartPacket { tag, length, value })
 }
+
+pub(crate) fn generate_packet(packet_type: u8, payload: &[u8]) -> Vec<u8> {
+    let mut packet = Vec::with_capacity(1 + 4 + payload.len());
+
+    // Add the packet type
+    packet.push(packet_type);
+
+    // Add the length tag
+    let length = payload.len() as u32;
+    packet.extend_from_slice(&length.to_be_bytes());
+
+    // Add the payload
+    packet.extend_from_slice(payload);
+
+    packet
+}

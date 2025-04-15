@@ -10,7 +10,8 @@ use tokio::{
 };
 
 use crate::protocol::{
-    self, GetRequest, GetResponse, PACKET_BYTE_LIMIT, PAYLOAD_CHUNK_SIZE, parse_start_packet,
+    self, GetRequest, GetResponse, PACKET_BYTE_LIMIT, PAYLOAD_CHUNK_SIZE, generate_packet,
+    parse_start_packet,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -335,22 +336,6 @@ async fn request_clear(tcp_stream: &mut TcpStream) -> ClientResult<()> {
     }
 
     Ok(())
-}
-
-fn generate_packet(packet_type: u8, payload: &[u8]) -> Vec<u8> {
-    let mut packet = Vec::with_capacity(1 + 4 + payload.len());
-
-    // Add the packet type
-    packet.push(packet_type);
-
-    // Add the length tag
-    let length = payload.len() as u32;
-    packet.extend_from_slice(&length.to_be_bytes());
-
-    // Add the payload
-    packet.extend_from_slice(payload);
-
-    packet
 }
 
 async fn fetch_all_packet(tcp_stream: &mut TcpStream) -> ClientResult<(u8, Vec<u8>)> {
