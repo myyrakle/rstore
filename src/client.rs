@@ -287,6 +287,8 @@ async fn request_set(
 
     let (response_tag, _) = fetch_all_packet(tcp_stream).await?;
 
+    println!("Response tag: {}", response_tag);
+
     if response_tag != protocol::SET_OK {
         return Err(ClientError::ConnectionError(std::io::Error::new(
             std::io::ErrorKind::InvalidData,
@@ -341,7 +343,7 @@ async fn request_clear(tcp_stream: &mut TcpStream) -> ClientResult<()> {
 async fn fetch_all_packet(tcp_stream: &mut TcpStream) -> ClientResult<(u8, Vec<u8>)> {
     let mut packet_buffer = [0; PAYLOAD_CHUNK_SIZE as usize];
 
-    let _ = tcp_stream.read(&mut packet_buffer).await?;
+    let first_read_count = tcp_stream.read(&mut packet_buffer).await?;
 
     let (length, tag, mut all_bytes) = {
         let start_packet = parse_start_packet(&packet_buffer).ok_or(
@@ -354,7 +356,7 @@ async fn fetch_all_packet(tcp_stream: &mut TcpStream) -> ClientResult<(u8, Vec<u
         let length = start_packet.length;
         let tag = start_packet.tag;
 
-        let mut all_bytes = start_packet.value.to_vec();
+        let mut all_bytes = start_packet.value[..first_read_count].to_vec();
         all_bytes.reserve(start_packet.length as usize);
 
         (length, tag, all_bytes)

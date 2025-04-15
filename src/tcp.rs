@@ -95,6 +95,7 @@ async fn handle_stream(mut tcp_stream: TcpStream, mut engine: KVEngine) {
                         println!("Received SET");
 
                         let start_packet = parse_start_packet(read_buffer);
+                        println!("start packet: {:?}", start_packet);
 
                         match start_packet {
                             Some(packet) => {

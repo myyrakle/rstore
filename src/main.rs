@@ -26,13 +26,13 @@ async fn main() -> ClientResult<()> {
         })
         .await?;
 
-    // let response = client
-    //     .get(GetRequest {
-    //         key: "key".to_string(),
-    //     })
-    //     .await?;
+    let response = client
+        .get(GetRequest {
+            key: "key".to_string(),
+        })
+        .await?;
 
-    // println!("Response: {:?}", response);
+    println!("Response: {:?}", response);
 
     Ok(())
 }

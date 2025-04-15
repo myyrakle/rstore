@@ -18,17 +18,16 @@ pub const DELETE: u8 = 0x04;
 pub const CLEAR: u8 = 0x05;
 
 // Response Tag - Start Byte
-pub const PONG: u8 = 0x01;
-pub const SET_OK: u8 = 0x02;
-pub const GET_OK: u8 = 0x03;
-pub const DELETE_OK: u8 = 0x04;
-pub const CLEAR_OK: u8 = 0x05;
-pub const PACKET_INVALID: u8 = 0xFE;
-pub const ERROR: u8 = 0xFF;
+pub const PONG: u8 = 0xf1;
+pub const SET_OK: u8 = 0xf2;
+pub const GET_OK: u8 = 0xf3;
+pub const DELETE_OK: u8 = 0xf4;
+pub const CLEAR_OK: u8 = 0xf5;
+pub const PACKET_INVALID: u8 = 0xfe;
+pub const ERROR: u8 = 0xff;
 
-pub const NO_VALUE_TAGS: [u8; 9] = [
+pub const NO_VALUE_TAGS: [u8; 8] = [
     PING,
-    SET,
     CLEAR,
     PONG,
     SET_OK,
@@ -59,6 +58,7 @@ pub struct DeleteRequest {
     pub key: String,
 }
 
+#[derive(Debug, Clone)]
 pub struct StartPacket<'a> {
     pub tag: u8,
     pub length: u32,
@@ -83,6 +83,11 @@ pub(crate) fn parse_start_packet(packet: &[u8]) -> Option<StartPacket<'_>> {
 
     let length = u32::from_be_bytes([packet[1], packet[2], packet[3], packet[4]]);
     let value = &packet[5..];
+
+    println!("original packet: {:?}", packet);
+    println!("parsed packet: {:?}", value);
+    println!("parsed packet length: {:?}", length);
+    println!("parsed packet tag: {:?}", tag);
 
     Some(StartPacket { tag, length, value })
 }
