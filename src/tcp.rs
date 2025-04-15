@@ -1,3 +1,4 @@
+use chorba::{Decode, Encode, decode};
 use engine::KVEngine;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -67,7 +68,7 @@ async fn main() {
     }
 }
 
-async fn handle_stream(mut tcp_stream: TcpStream, engine: KVEngine) {
+async fn handle_stream(mut tcp_stream: TcpStream, mut engine: KVEngine) {
     let mut read_buffer: [u8; PAYLOAD_CHUNK_SIZE as usize] = [0; PAYLOAD_CHUNK_SIZE as usize];
 
     let mut state = StreamStatus::default();
@@ -130,7 +131,7 @@ async fn handle_stream(mut tcp_stream: TcpStream, engine: KVEngine) {
                                     continue;
                                 }
 
-                                process_set(&mut tcp_stream, packet.value);
+                                process_set(&mut tcp_stream, &mut engine, packet.value).await;
                             }
                             None => {
                                 let _ = tcp_stream.write(&[PACKET_INVALID]).await;
@@ -157,7 +158,7 @@ async fn handle_stream(mut tcp_stream: TcpStream, engine: KVEngine) {
                                     continue;
                                 }
 
-                                process_get(&mut tcp_stream, packet.value);
+                                process_get(&mut tcp_stream, &mut engine, packet.value);
                             }
                             None => {
                                 let _ = tcp_stream.write(&[PACKET_INVALID]).await;
@@ -185,7 +186,7 @@ async fn handle_stream(mut tcp_stream: TcpStream, engine: KVEngine) {
                                 }
 
                                 // Process the value
-                                process_delete(&mut tcp_stream, packet.value);
+                                process_delete(&mut tcp_stream, &mut engine, packet.value);
                             }
                             None => {
                                 let _ = tcp_stream.write(&[PACKET_INVALID]).await;
@@ -215,7 +216,7 @@ async fn handle_stream(mut tcp_stream: TcpStream, engine: KVEngine) {
 
                 if context_buffer.len() as u32 >= length {
                     // Process the value
-                    process_set(&mut tcp_stream, &context_buffer);
+                    process_set(&mut tcp_stream, &mut engine, &context_buffer).await;
 
                     // Reset state
                     state = StreamStatus::NONE;
@@ -237,7 +238,7 @@ async fn handle_stream(mut tcp_stream: TcpStream, engine: KVEngine) {
 
                 if context_buffer.len() as u32 >= PAYLOAD_FIRST_MAX_VALUE_SIZE {
                     // Process the value
-                    process_get(&mut tcp_stream, &context_buffer);
+                    process_get(&mut tcp_stream, &mut engine, &context_buffer);
 
                     // Reset state
                     state = StreamStatus::NONE;
@@ -259,7 +260,7 @@ async fn handle_stream(mut tcp_stream: TcpStream, engine: KVEngine) {
 
                 if context_buffer.len() as u32 >= PAYLOAD_FIRST_MAX_VALUE_SIZE {
                     // Process the value
-                    process_delete(&mut tcp_stream, &context_buffer);
+                    process_delete(&mut tcp_stream, &mut engine, &context_buffer);
 
                     // Reset state
                     state = StreamStatus::NONE;
@@ -289,14 +290,36 @@ pub fn parse_start_packet(packet: &[u8]) -> Option<StartPacket<'_>> {
     Some(StartPacket { tag, length, value })
 }
 
-pub fn process_set(stream: &mut TcpStream, bytes: &[u8]) {
-    // TODO implement set
+#[derive(Decode)]
+pub struct SetRequest {
+    pub key: String,
+    pub value: String,
 }
 
-pub fn process_get(stream: &mut TcpStream, bytes: &[u8]) {
+pub async fn process_set(stream: &mut TcpStream, engine: &mut KVEngine, bytes: &[u8]) {
+    let decode_result = decode::<SetRequest>(bytes);
+
+    let set_request = match decode_result {
+        Ok(set_request) => set_request,
+        Err(error) => {
+            eprintln!("Failed to decode SetRequest: {}", error);
+            let _ = stream.write(&[PACKET_INVALID]).await;
+            return;
+        }
+    };
+
+    let key = set_request.key;
+    let value = set_request.value;
+    if let Err(error) = engine.set_key_value(key, value) {
+        eprintln!("Failed to set key-value pair: {}", error);
+        let _ = stream.write(&[ERROR]).await;
+    }
+}
+
+pub fn process_get(stream: &mut TcpStream, engine: &mut KVEngine, bytes: &[u8]) {
     // TODO implement get
 }
 
-pub fn process_delete(stream: &mut TcpStream, bytes: &[u8]) {
+pub fn process_delete(stream: &mut TcpStream, engine: &mut KVEngine, bytes: &[u8]) {
     // TODO implement get
 }

@@ -1,7 +1,15 @@
 use std::{io::Write, net::TcpStream};
 
-#[tokio::main]
-async fn main() {
+extern crate serde;
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize)]
+pub struct Foo {
+    pub user_id: String,
+    pub user_name: String,
+}
+
+fn main() {
     let mut stream = TcpStream::connect("0.0.0.0:13535").unwrap();
 
     let mut buffer = [0; 1024];
