@@ -141,6 +141,26 @@ impl RStoreClient {
 
         Ok(response)
     }
+
+    pub async fn set(&self, request: protocol::SetRequest) -> ClientResult<()> {
+        let mut connection = self.get_connection_or_wait().await?;
+
+        let _ = request_set(&mut connection.tcp_stream, request).await;
+
+        connection.release_to_pool();
+
+        Ok(())
+    }
+
+    pub async fn delete(&self, request: protocol::DeleteRequest) -> ClientResult<()> {
+        let mut connection = self.get_connection_or_wait().await?;
+
+        let _ = request_delete(&mut connection.tcp_stream, request).await;
+
+        connection.release_to_pool();
+
+        Ok(())
+    }
 }
 
 #[derive(Debug)]
@@ -215,6 +235,50 @@ async fn request_get(tcp_stream: &mut TcpStream, request: GetRequest) -> ClientR
     })?;
 
     Ok(decoded)
+}
+
+async fn request_set(
+    tcp_stream: &mut TcpStream,
+    request: protocol::SetRequest,
+) -> ClientResult<()> {
+    let request_bytes = encode(&request);
+
+    let request_packet = generate_packet(protocol::SET, &request_bytes);
+
+    tcp_stream.write(&request_packet).await?;
+
+    let (response_tag, _) = fetch_all_packet(tcp_stream).await?;
+
+    if response_tag != protocol::SET_OK {
+        return Err(ClientError::ConnectionError(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "Invalid response tag",
+        )));
+    }
+
+    Ok(())
+}
+
+async fn request_delete(
+    tcp_stream: &mut TcpStream,
+    request: protocol::DeleteRequest,
+) -> ClientResult<()> {
+    let request_bytes = encode(&request);
+
+    let request_packet = generate_packet(protocol::DELETE, &request_bytes);
+
+    tcp_stream.write(&request_packet).await?;
+
+    let (response_tag, _) = fetch_all_packet(tcp_stream).await?;
+
+    if response_tag != protocol::DELETE_OK {
+        return Err(ClientError::ConnectionError(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "Invalid response tag",
+        )));
+    }
+
+    Ok(())
 }
 
 fn generate_packet(packet_type: u8, payload: &[u8]) -> Vec<u8> {
