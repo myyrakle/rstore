@@ -10,8 +10,7 @@ use tokio::{
 };
 
 use crate::protocol::{
-    self, GetRequest, GetResponse, PACKET_BYTE_LIMIT, PAYLOAD_CHUNK_SIZE, generate_packet,
-    parse_start_packet,
+    self, GetRequest, GetResponse, PAYLOAD_CHUNK_SIZE, generate_packet, parse_start_packet,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -239,12 +238,12 @@ async fn request_ping(tcp_stream: &mut TcpStream) -> ClientResult<()> {
 
     let (response_tag, _) = fetch_all_packet(tcp_stream).await?;
 
-    // if response_tag != protocol::PONG {
-    //     return Err(ClientError::ConnectionError(std::io::Error::new(
-    //         std::io::ErrorKind::InvalidData,
-    //         "Ping Failed",
-    //     )));
-    // }
+    if response_tag != protocol::PONG {
+        return Err(ClientError::ConnectionError(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "Ping Failed",
+        )));
+    }
 
     Ok(())
 }
@@ -346,7 +345,7 @@ async fn fetch_all_packet(tcp_stream: &mut TcpStream) -> ClientResult<(u8, Vec<u
     let first_read_count = tcp_stream.read(&mut packet_buffer).await?;
 
     let (length, tag, mut all_bytes) = {
-        let start_packet = parse_start_packet(&packet_buffer).ok_or(
+        let start_packet = parse_start_packet(&packet_buffer[..first_read_count]).ok_or(
             ClientError::ConnectionError(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 "Failed to parse start packet",
@@ -356,7 +355,7 @@ async fn fetch_all_packet(tcp_stream: &mut TcpStream) -> ClientResult<(u8, Vec<u
         let length = start_packet.length;
         let tag = start_packet.tag;
 
-        let mut all_bytes = start_packet.value[..first_read_count].to_vec();
+        let mut all_bytes = start_packet.value.to_vec();
         all_bytes.reserve(start_packet.length as usize);
 
         (length, tag, all_bytes)

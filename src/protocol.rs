@@ -67,8 +67,18 @@ pub struct StartPacket<'a> {
 
 #[allow(dead_code)]
 pub(crate) fn parse_start_packet(packet: &[u8]) -> Option<StartPacket<'_>> {
-    if packet.len() < 5 {
+    if packet.is_empty() {
         return None;
+    }
+
+    let tag = packet[0];
+
+    if packet.len() < 5 {
+        return Some(StartPacket {
+            tag,
+            length: 0,
+            value: packet,
+        });
     }
 
     let tag = packet[0];
@@ -83,11 +93,6 @@ pub(crate) fn parse_start_packet(packet: &[u8]) -> Option<StartPacket<'_>> {
 
     let length = u32::from_be_bytes([packet[1], packet[2], packet[3], packet[4]]);
     let value = &packet[5..];
-
-    println!("original packet: {:?}", packet);
-    println!("parsed packet: {:?}", value);
-    println!("parsed packet length: {:?}", length);
-    println!("parsed packet tag: {:?}", tag);
 
     Some(StartPacket { tag, length, value })
 }
