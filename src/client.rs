@@ -264,8 +264,6 @@ async fn request_get(tcp_stream: &mut TcpStream, request: GetRequest) -> ClientR
         )));
     }
 
-    println!("response_bytes: {:?}", response_bytes);
-
     let decoded = decode::<GetResponse>(&response_bytes).map_err(|_| {
         ClientError::ConnectionError(std::io::Error::new(
             std::io::ErrorKind::InvalidData,
@@ -287,8 +285,6 @@ async fn request_set(
     tcp_stream.write(&request_packet).await?;
 
     let (response_tag, _) = fetch_all_packet(tcp_stream).await?;
-
-    println!("Response tag: {}", response_tag);
 
     if response_tag != protocol::SET_OK {
         return Err(ClientError::ConnectionError(std::io::Error::new(

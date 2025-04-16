@@ -18,7 +18,7 @@ async fn main() {
     let engine = KVEngine::new();
 
     let address = "0.0.0.0:13535";
-    println!("Listening on {}", address);
+    log::debug!("Listening on {}", address);
 
     // 1. 서버 시작
     let listener = tokio::net::TcpListener::bind(address).await.unwrap();
@@ -26,7 +26,7 @@ async fn main() {
     loop {
         // 2. 클라이언트 연결 수신 (단일 세션)
         if let Ok((tcp_stream, socket_address)) = listener.accept().await {
-            println!("Accepted connection from {}", socket_address);
+            log::debug!("Accepted connection from {}", socket_address);
 
             let engine = engine.clone();
 
@@ -74,17 +74,17 @@ async fn handle_stream(mut tcp_stream: TcpStream, mut engine: KVEngine) {
         match state {
             StreamStatus::NONE => {
                 if size == 0 {
-                    println!("No data received");
+                    log::debug!("No data received");
                     return;
                 }
 
-                println!("Received {:?} bytes", read_buffer);
+                log::debug!("Received {:?} bytes", read_buffer);
 
                 let first_byte = read_buffer[0];
 
                 match first_byte {
                     PING => {
-                        println!("Received PING");
+                        log::debug!("Received PING");
 
                         if let Err(error) = tcp_stream.write(&[PONG]).await {
                             log::error!("Failed to send PONG: {}", error);
@@ -92,10 +92,10 @@ async fn handle_stream(mut tcp_stream: TcpStream, mut engine: KVEngine) {
                         }
                     }
                     SET => {
-                        println!("Received SET");
+                        log::debug!("Received SET");
 
                         let start_packet = parse_start_packet(read_buffer);
-                        println!("start packet: {:?}", start_packet);
+                        log::debug!("start packet: {:?}", start_packet);
 
                         match start_packet {
                             Some(packet) => {
@@ -120,7 +120,7 @@ async fn handle_stream(mut tcp_stream: TcpStream, mut engine: KVEngine) {
                         }
                     }
                     GET => {
-                        println!("Received GET");
+                        log::debug!("Received GET");
 
                         let start_packet = parse_start_packet(read_buffer);
 
@@ -147,7 +147,7 @@ async fn handle_stream(mut tcp_stream: TcpStream, mut engine: KVEngine) {
                         }
                     }
                     DELETE => {
-                        println!("Received DELETE");
+                        log::debug!("Received DELETE");
 
                         let start_packet = parse_start_packet(read_buffer);
 
@@ -175,7 +175,7 @@ async fn handle_stream(mut tcp_stream: TcpStream, mut engine: KVEngine) {
                         }
                     }
                     CLEAR => {
-                        println!("Received CLEAR");
+                        log::debug!("Received CLEAR");
 
                         if let Err(error) = engine.clear_all() {
                             log::error!("Failed to clear all key-value pairs: {}", error);
@@ -192,10 +192,10 @@ async fn handle_stream(mut tcp_stream: TcpStream, mut engine: KVEngine) {
                 }
             }
             StreamStatus::SET(length) => {
-                println!("Stream status: SET");
+                log::debug!("Stream status: SET");
 
                 if read_buffer.is_empty() {
-                    println!("No data received");
+                    log::debug!("No data received");
                     state = StreamStatus::NONE;
 
                     continue;
@@ -210,14 +210,14 @@ async fn handle_stream(mut tcp_stream: TcpStream, mut engine: KVEngine) {
                     // Reset state
                     state = StreamStatus::NONE;
                 } else {
-                    println!("Waiting for more data...");
+                    log::debug!("Waiting for more data...");
                 }
             }
             StreamStatus::GET(_) => {
-                println!("Stream status: GET");
+                log::debug!("Stream status: GET");
 
                 if read_buffer.is_empty() {
-                    println!("No data received");
+                    log::debug!("No data received");
                     state = StreamStatus::NONE;
 
                     continue;
@@ -232,14 +232,14 @@ async fn handle_stream(mut tcp_stream: TcpStream, mut engine: KVEngine) {
                     // Reset state
                     state = StreamStatus::NONE;
                 } else {
-                    println!("Waiting for more data...");
+                    log::debug!("Waiting for more data...");
                 }
             }
             StreamStatus::DELETE(_) => {
-                println!("Stream status: DELETE");
+                log::debug!("Stream status: DELETE");
 
                 if read_buffer.is_empty() {
-                    println!("No data received");
+                    log::debug!("No data received");
                     state = StreamStatus::NONE;
 
                     continue;
@@ -254,7 +254,7 @@ async fn handle_stream(mut tcp_stream: TcpStream, mut engine: KVEngine) {
                     // Reset state
                     state = StreamStatus::NONE;
                 } else {
-                    println!("Waiting for more data...");
+                    log::debug!("Waiting for more data...");
                 }
             }
         }
