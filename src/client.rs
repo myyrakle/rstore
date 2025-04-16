@@ -152,7 +152,7 @@ impl RStoreClient {
     pub async fn ping(&self) -> ClientResult<()> {
         let mut connection = self.get_connection_or_wait().await?;
 
-        let _ = request_ping(&mut connection.tcp_stream).await?;
+        request_ping(&mut connection.tcp_stream).await?;
 
         connection.release_to_pool();
 
@@ -172,7 +172,7 @@ impl RStoreClient {
     pub async fn set(&self, request: protocol::SetRequest) -> ClientResult<()> {
         let mut connection = self.get_connection_or_wait().await?;
 
-        let _ = request_set(&mut connection.tcp_stream, request).await?;
+        request_set(&mut connection.tcp_stream, request).await?;
 
         connection.release_to_pool();
 
@@ -182,7 +182,7 @@ impl RStoreClient {
     pub async fn delete(&self, request: protocol::DeleteRequest) -> ClientResult<()> {
         let mut connection = self.get_connection_or_wait().await?;
 
-        let _ = request_delete(&mut connection.tcp_stream, request).await?;
+        request_delete(&mut connection.tcp_stream, request).await?;
 
         connection.release_to_pool();
 
@@ -192,7 +192,7 @@ impl RStoreClient {
     pub async fn clear(&self) -> ClientResult<()> {
         let mut connection = self.get_connection_or_wait().await?;
 
-        let _ = request_clear(&mut connection.tcp_stream).await?;
+        request_clear(&mut connection.tcp_stream).await?;
 
         connection.release_to_pool();
 
@@ -214,10 +214,7 @@ pub struct PooledConnection {
 
 impl PooledConnection {
     pub fn new(tcp_stream: TcpStream, pool: Weak<Mutex<ConnectionPool>>) -> Self {
-        PooledConnection {
-            tcp_stream,
-            pool: pool,
-        }
+        PooledConnection { tcp_stream, pool }
     }
 
     pub fn release_to_pool(self) {
@@ -234,7 +231,7 @@ async fn request_ping(tcp_stream: &mut TcpStream) -> ClientResult<()> {
 
     let request_packet = generate_packet(protocol::PING, &request_bytes);
 
-    tcp_stream.write(&request_packet).await?;
+    tcp_stream.write_all(&request_packet).await?;
 
     let (response_tag, _) = fetch_all_packet(tcp_stream).await?;
 
@@ -253,7 +250,7 @@ async fn request_get(tcp_stream: &mut TcpStream, request: GetRequest) -> ClientR
 
     let request_packet = generate_packet(protocol::GET, &request_bytes);
 
-    tcp_stream.write(&request_packet).await?;
+    tcp_stream.write_all(&request_packet).await?;
 
     let (response_tag, response_bytes) = fetch_all_packet(tcp_stream).await?;
 
@@ -282,7 +279,7 @@ async fn request_set(
 
     let request_packet = generate_packet(protocol::SET, &request_bytes);
 
-    tcp_stream.write(&request_packet).await?;
+    tcp_stream.write_all(&request_packet).await?;
 
     let (response_tag, _) = fetch_all_packet(tcp_stream).await?;
 
@@ -304,7 +301,7 @@ async fn request_delete(
 
     let request_packet = generate_packet(protocol::DELETE, &request_bytes);
 
-    tcp_stream.write(&request_packet).await?;
+    tcp_stream.write_all(&request_packet).await?;
 
     let (response_tag, _) = fetch_all_packet(tcp_stream).await?;
 
@@ -323,7 +320,7 @@ async fn request_clear(tcp_stream: &mut TcpStream) -> ClientResult<()> {
 
     let request_packet = generate_packet(protocol::CLEAR, &request_bytes);
 
-    tcp_stream.write(&request_packet).await?;
+    tcp_stream.write_all(&request_packet).await?;
 
     let (response_tag, _) = fetch_all_packet(tcp_stream).await?;
 

@@ -16,10 +16,10 @@ async fn main() -> ClientResult<()> {
 
     client.connect().await?;
 
-    let _ = client.ping().await?;
+    client.ping().await?;
     println!("PING PONG");
 
-    let _ = client
+    client
         .set(SetRequest {
             key: "key".to_string(),
             value: "value".to_string(),
