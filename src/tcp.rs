@@ -18,7 +18,7 @@ async fn main() {
     let engine = KVEngine::new();
 
     let address = "0.0.0.0:13535";
-    println!("Listening on {}", address);
+    log::debug!("Listening on {}", address);
 
     // 1. 서버 시작
     let listener = tokio::net::TcpListener::bind(address).await.unwrap();
@@ -26,7 +26,7 @@ async fn main() {
     loop {
         // 2. 클라이언트 연결 수신 (단일 세션)
         if let Ok((tcp_stream, socket_address)) = listener.accept().await {
-            println!("Accepted connection from {}", socket_address);
+            log::debug!("Accepted connection from {}", socket_address);
 
             let engine = engine.clone();
 
@@ -34,7 +34,7 @@ async fn main() {
                 handle_stream(tcp_stream, engine).await;
             });
         } else {
-            eprintln!("Failed to accept connection");
+            log::error!("Failed to accept connection");
         }
     }
 }
@@ -64,7 +64,7 @@ async fn handle_stream(mut tcp_stream: TcpStream, mut engine: KVEngine) {
         let size = match stream_result {
             Ok(size) => size,
             Err(error) => {
-                eprintln!("Failed to read from socket: {}", error);
+                log::error!("Failed to read from socket: {}", error);
                 break;
             }
         };
@@ -74,33 +74,33 @@ async fn handle_stream(mut tcp_stream: TcpStream, mut engine: KVEngine) {
         match state {
             StreamStatus::NONE => {
                 if size == 0 {
-                    println!("No data received");
+                    log::debug!("No data received");
                     return;
                 }
 
-                println!("Received {:?} bytes", read_buffer);
+                log::debug!("Received {:?} bytes", read_buffer);
 
                 let first_byte = read_buffer[0];
 
                 match first_byte {
                     PING => {
-                        println!("Received PING");
+                        log::debug!("Received PING");
 
                         if let Err(error) = tcp_stream.write(&[PONG]).await {
-                            eprintln!("Failed to send PONG: {}", error);
+                            log::error!("Failed to send PONG: {}", error);
                             continue;
                         }
                     }
                     SET => {
-                        println!("Received SET");
+                        log::debug!("Received SET");
 
                         let start_packet = parse_start_packet(read_buffer);
-                        println!("start packet: {:?}", start_packet);
+                        log::debug!("start packet: {:?}", start_packet);
 
                         match start_packet {
                             Some(packet) => {
                                 if packet.length > PACKET_BYTE_LIMIT {
-                                    eprintln!("packet size exceeds limit");
+                                    log::error!("packet size exceeds limit");
                                     let _ = tcp_stream.write(&[PACKET_INVALID]).await;
                                     continue;
                                 }
@@ -120,14 +120,14 @@ async fn handle_stream(mut tcp_stream: TcpStream, mut engine: KVEngine) {
                         }
                     }
                     GET => {
-                        println!("Received GET");
+                        log::debug!("Received GET");
 
                         let start_packet = parse_start_packet(read_buffer);
 
                         match start_packet {
                             Some(packet) => {
                                 if packet.length > PACKET_BYTE_LIMIT {
-                                    eprintln!("packet size exceeds limit");
+                                    log::error!("packet size exceeds limit");
                                     let _ = tcp_stream.write(&[PACKET_INVALID]).await;
                                     continue;
                                 }
@@ -147,14 +147,14 @@ async fn handle_stream(mut tcp_stream: TcpStream, mut engine: KVEngine) {
                         }
                     }
                     DELETE => {
-                        println!("Received DELETE");
+                        log::debug!("Received DELETE");
 
                         let start_packet = parse_start_packet(read_buffer);
 
                         match start_packet {
                             Some(packet) => {
                                 if packet.length > PACKET_BYTE_LIMIT {
-                                    eprintln!("packet size exceeds limit");
+                                    log::error!("packet size exceeds limit");
                                     let _ = tcp_stream.write(&[PACKET_INVALID]).await;
                                     continue;
                                 }
@@ -175,10 +175,10 @@ async fn handle_stream(mut tcp_stream: TcpStream, mut engine: KVEngine) {
                         }
                     }
                     CLEAR => {
-                        println!("Received CLEAR");
+                        log::debug!("Received CLEAR");
 
                         if let Err(error) = engine.clear_all() {
-                            eprintln!("Failed to clear all key-value pairs: {}", error);
+                            log::error!("Failed to clear all key-value pairs: {}", error);
                             let _ = tcp_stream.write(&[ERROR]).await;
                             continue;
                         }
@@ -187,15 +187,15 @@ async fn handle_stream(mut tcp_stream: TcpStream, mut engine: KVEngine) {
                         let _ = tcp_stream.write_all(&[CLEAR_OK]).await;
                     }
                     _ => {
-                        eprintln!("Unknown command: {}", first_byte);
+                        log::error!("Unknown command: {}", first_byte);
                     }
                 }
             }
             StreamStatus::SET(length) => {
-                println!("Stream status: SET");
+                log::debug!("Stream status: SET");
 
                 if read_buffer.is_empty() {
-                    println!("No data received");
+                    log::debug!("No data received");
                     state = StreamStatus::NONE;
 
                     continue;
@@ -210,14 +210,14 @@ async fn handle_stream(mut tcp_stream: TcpStream, mut engine: KVEngine) {
                     // Reset state
                     state = StreamStatus::NONE;
                 } else {
-                    println!("Waiting for more data...");
+                    log::debug!("Waiting for more data...");
                 }
             }
             StreamStatus::GET(_) => {
-                println!("Stream status: GET");
+                log::debug!("Stream status: GET");
 
                 if read_buffer.is_empty() {
-                    println!("No data received");
+                    log::debug!("No data received");
                     state = StreamStatus::NONE;
 
                     continue;
@@ -232,14 +232,14 @@ async fn handle_stream(mut tcp_stream: TcpStream, mut engine: KVEngine) {
                     // Reset state
                     state = StreamStatus::NONE;
                 } else {
-                    println!("Waiting for more data...");
+                    log::debug!("Waiting for more data...");
                 }
             }
             StreamStatus::DELETE(_) => {
-                println!("Stream status: DELETE");
+                log::debug!("Stream status: DELETE");
 
                 if read_buffer.is_empty() {
-                    println!("No data received");
+                    log::debug!("No data received");
                     state = StreamStatus::NONE;
 
                     continue;
@@ -254,7 +254,7 @@ async fn handle_stream(mut tcp_stream: TcpStream, mut engine: KVEngine) {
                     // Reset state
                     state = StreamStatus::NONE;
                 } else {
-                    println!("Waiting for more data...");
+                    log::debug!("Waiting for more data...");
                 }
             }
         }
@@ -267,7 +267,7 @@ pub async fn process_set(stream: &mut TcpStream, engine: &mut KVEngine, bytes: &
     let set_request = match decode_result {
         Ok(set_request) => set_request,
         Err(error) => {
-            eprintln!("Failed to decode SetRequest: {}", error);
+            log::error!("Failed to decode SetRequest: {}", error);
             let _ = stream.write(&[PACKET_INVALID]).await;
             return;
         }
@@ -276,7 +276,7 @@ pub async fn process_set(stream: &mut TcpStream, engine: &mut KVEngine, bytes: &
     let key = set_request.key;
     let value = set_request.value;
     if let Err(error) = engine.set_key_value(key, value) {
-        eprintln!("Failed to set key-value pair: {}", error);
+        log::error!("Failed to set key-value pair: {}", error);
         let _ = stream.write(&[ERROR]).await;
     }
 
@@ -290,7 +290,7 @@ pub async fn process_get(stream: &mut TcpStream, engine: &mut KVEngine, bytes: &
     let get_request = match decode_result {
         Ok(get_request) => get_request,
         Err(error) => {
-            eprintln!("Failed to decode GetRequest: {}", error);
+            log::error!("Failed to decode GetRequest: {}", error);
             let _ = stream.write(&[PACKET_INVALID]).await;
             return;
         }
@@ -307,7 +307,7 @@ pub async fn process_get(stream: &mut TcpStream, engine: &mut KVEngine, bytes: &
             let _ = stream.write_all(&response).await;
         }
         Err(error) => {
-            eprintln!("Failed to get key-value pair: {}", error);
+            log::error!("Failed to get key-value pair: {}", error);
             let _ = stream.write(&[ERROR]).await;
         }
     }
@@ -319,7 +319,7 @@ pub async fn process_delete(stream: &mut TcpStream, engine: &mut KVEngine, bytes
     let get_request = match decode_result {
         Ok(get_request) => get_request,
         Err(error) => {
-            eprintln!("Failed to decode GetRequest: {}", error);
+            log::error!("Failed to decode GetRequest: {}", error);
             let _ = stream.write(&[PACKET_INVALID]).await;
             return;
         }
@@ -327,7 +327,7 @@ pub async fn process_delete(stream: &mut TcpStream, engine: &mut KVEngine, bytes
 
     let key = get_request.key;
     if let Err(error) = engine.delete_key_value(&key) {
-        eprintln!("Failed to delete key-value pair: {}", error);
+        log::error!("Failed to delete key-value pair: {}", error);
         let _ = stream.write(&[ERROR]).await;
     }
 
