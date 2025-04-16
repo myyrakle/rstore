@@ -1,0 +1,14 @@
+FROM rust:1.86.0-alpine AS builder
+COPY . /home/server 
+WORKDIR /home/server
+# Do something for ready to build
+RUN apk add musl-dev
+RUN cargo build --bin http --release
+RUN mv /home/server/target/release/http /home/server/bin
+
+FROM alpine:3.21.3 AS deployer
+RUN mkdir /app
+COPY --from=builder /home/server/bin /app/server
+RUN ls -lah /app
+ENTRYPOINT [ "/bin/sh", "-c", "/app/server" ]
+EXPOSE 13535

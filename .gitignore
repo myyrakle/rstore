@@ -20,4 +20,4 @@ target/
 
 /target
 
-*.http
+test.http
