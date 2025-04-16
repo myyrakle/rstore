@@ -1,18 +1,38 @@
-use std::{io::Write, net::TcpStream};
+pub mod protocol;
 
 extern crate serde;
-use serde::Serialize;
+use rstore::{
+    client::{ClientResult, ConnectionConfig, RStoreClient},
+    protocol::{GetRequest, SetRequest},
+};
 
-#[derive(Serialize)]
-pub struct Foo {
-    pub user_id: String,
-    pub user_name: String,
-}
+#[tokio::main]
+async fn main() -> ClientResult<()> {
+    let client = RStoreClient::new(ConnectionConfig {
+        host: "0.0.0.0".to_string(),
+        port: 13535,
+        ..Default::default()
+    });
 
-fn main() {
-    let mut stream = TcpStream::connect("0.0.0.0:13535").unwrap();
+    client.connect().await?;
 
-    let buffer = [0; 1024];
+    let _ = client.ping().await?;
+    println!("PING PONG");
 
-    stream.write_all(buffer.as_slice()).unwrap();
+    let _ = client
+        .set(SetRequest {
+            key: "key".to_string(),
+            value: "value".to_string(),
+        })
+        .await?;
+
+    let response = client
+        .get(GetRequest {
+            key: "key".to_string(),
+        })
+        .await?;
+
+    println!("Response: {:?}", response);
+
+    Ok(())
 }

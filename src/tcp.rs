@@ -1,9 +1,9 @@
-use chorba::decode;
+use chorba::{decode, encode};
 use engine::KVEngine;
 use protocol::{
-    CLEAR, DELETE, DeleteRequest, ERROR, GET, GET_OK, GetRequest, PACKET_BYTE_LIMIT,
-    PACKET_INVALID, PAYLOAD_CHUNK_SIZE, PAYLOAD_FIRST_MAX_VALUE_SIZE, PING, PONG, SET, SetRequest,
-    parse_start_packet,
+    CLEAR, CLEAR_OK, DELETE, DELETE_OK, DeleteRequest, ERROR, GET, GET_OK, GetRequest, GetResponse,
+    PACKET_BYTE_LIMIT, PACKET_INVALID, PAYLOAD_CHUNK_SIZE, PAYLOAD_FIRST_MAX_VALUE_SIZE, PING,
+    PONG, SET, SET_OK, SetRequest, generate_packet, parse_start_packet,
 };
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -11,7 +11,7 @@ use tokio::{
 };
 
 mod engine;
-mod protocol;
+pub mod protocol;
 
 #[tokio::main]
 async fn main() {
@@ -75,7 +75,7 @@ async fn handle_stream(mut tcp_stream: TcpStream, mut engine: KVEngine) {
             StreamStatus::NONE => {
                 if size == 0 {
                     println!("No data received");
-                    continue;
+                    return;
                 }
 
                 println!("Received {:?} bytes", read_buffer);
@@ -95,6 +95,7 @@ async fn handle_stream(mut tcp_stream: TcpStream, mut engine: KVEngine) {
                         println!("Received SET");
 
                         let start_packet = parse_start_packet(read_buffer);
+                        println!("start packet: {:?}", start_packet);
 
                         match start_packet {
                             Some(packet) => {
@@ -181,6 +182,9 @@ async fn handle_stream(mut tcp_stream: TcpStream, mut engine: KVEngine) {
                             let _ = tcp_stream.write(&[ERROR]).await;
                             continue;
                         }
+
+                        // Send a response back to the client
+                        let _ = tcp_stream.write_all(&[CLEAR_OK]).await;
                     }
                     _ => {
                         eprintln!("Unknown command: {}", first_byte);
@@ -275,6 +279,9 @@ pub async fn process_set(stream: &mut TcpStream, engine: &mut KVEngine, bytes: &
         eprintln!("Failed to set key-value pair: {}", error);
         let _ = stream.write(&[ERROR]).await;
     }
+
+    // Send a response back to the client
+    let _ = stream.write_all(&[SET_OK]).await;
 }
 
 pub async fn process_get(stream: &mut TcpStream, engine: &mut KVEngine, bytes: &[u8]) {
@@ -293,8 +300,11 @@ pub async fn process_get(stream: &mut TcpStream, engine: &mut KVEngine, bytes: &
     match engine.get_key_value(&key) {
         Ok(value) => {
             // Send the value back to the client
-            let response = [GET_OK, value.len() as u8].to_vec();
-            stream.write_all(&response).await.unwrap();
+            let get_response = GetResponse { value };
+            let response_bytes = encode(&get_response);
+
+            let response = generate_packet(GET_OK, &response_bytes);
+            let _ = stream.write_all(&response).await;
         }
         Err(error) => {
             eprintln!("Failed to get key-value pair: {}", error);
@@ -320,4 +330,7 @@ pub async fn process_delete(stream: &mut TcpStream, engine: &mut KVEngine, bytes
         eprintln!("Failed to delete key-value pair: {}", error);
         let _ = stream.write(&[ERROR]).await;
     }
+
+    // Send a response back to the client
+    let _ = stream.write_all(&[DELETE_OK]).await;
 }

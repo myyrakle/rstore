@@ -9,7 +9,9 @@ use tokio::{
     net::TcpStream,
 };
 
-use crate::protocol::{self, GetRequest, GetResponse, PACKET_BYTE_LIMIT, parse_start_packet};
+use crate::protocol::{
+    self, GetRequest, GetResponse, PAYLOAD_CHUNK_SIZE, generate_packet, parse_start_packet,
+};
 
 #[derive(Debug, thiserror::Error)]
 pub enum ClientError {
@@ -35,6 +37,19 @@ const MIN_CONNECTION_DEFAULT: u32 = 1;
 const MAX_CONNECTION_DEFAULT: u32 = 10;
 const CONNECTION_TIMEOUT_DEFAULT: Duration = Duration::from_secs(30);
 const IDLE_TIMEOUT_DEFAULT: Duration = Duration::from_secs(60);
+
+impl Default for ConnectionConfig {
+    fn default() -> Self {
+        Self {
+            min_connections: MIN_CONNECTION_DEFAULT,
+            max_connections: MAX_CONNECTION_DEFAULT,
+            connection_timeout: CONNECTION_TIMEOUT_DEFAULT,
+            idle_timeout: IDLE_TIMEOUT_DEFAULT,
+            host: "".into(),
+            port: 0,
+        }
+    }
+}
 
 impl ConnectionConfig {
     pub fn new(host: String, port: u16) -> Self {
@@ -87,13 +102,16 @@ impl RStoreClient {
         Ok(pooled_connection)
     }
 
-    pub async fn connect(&mut self) -> ClientResult<()> {
-        let mut pool = self.connection_pool.lock().unwrap();
+    pub async fn connect(&self) -> ClientResult<()> {
+        let connection_count = { self.connection_pool.lock().unwrap().connection_count };
 
-        if pool.connection_count == 0 {
+        if connection_count == 0 {
             let new_connection = self.create_connection().await?;
 
-            pool.connections.push(new_connection);
+            {
+                let mut pool = self.connection_pool.lock().unwrap();
+                pool.connections.push(new_connection);
+            }
         }
 
         Ok(())
@@ -101,22 +119,31 @@ impl RStoreClient {
 
     pub async fn get_connection_or_wait(&self) -> ClientResult<PooledConnection> {
         loop {
-            let mut pool = self.connection_pool.lock().unwrap();
+            let (connections_is_empty, connection_count) = {
+                let pool = self.connection_pool.lock().unwrap();
+                let connection_count = pool.connection_count;
+                let connections_is_empty = pool.connections.is_empty();
+                (connections_is_empty, connection_count)
+            };
 
-            if pool.connections.is_empty()
-                && pool.connection_count < self.connection_config.max_connections
-            {
+            if connections_is_empty && connection_count < self.connection_config.max_connections {
                 let new_connection = self.create_connection().await?;
                 return Ok(new_connection);
             }
 
             // Remove the connection from the pool if it's not valid
-            pool.connections
-                .retain(|c| c.tcp_stream.peer_addr().is_ok());
+            {
+                let mut pool = self.connection_pool.lock().unwrap();
+                pool.connections
+                    .retain(|c| c.tcp_stream.peer_addr().is_ok());
+                pool.connection_count = pool.connections.len() as u32;
 
-            if let Some(connection) = pool.connections.pop() {
-                return Ok(connection);
+                if let Some(connection) = pool.connections.pop() {
+                    return Ok(connection);
+                }
             }
+
+            std::thread::sleep(Duration::from_millis(100));
 
             // TODO: cancel with timeout
         }
@@ -125,7 +152,7 @@ impl RStoreClient {
     pub async fn ping(&self) -> ClientResult<()> {
         let mut connection = self.get_connection_or_wait().await?;
 
-        let _ = request_ping(&mut connection.tcp_stream).await;
+        let _ = request_ping(&mut connection.tcp_stream).await?;
 
         connection.release_to_pool();
 
@@ -237,6 +264,8 @@ async fn request_get(tcp_stream: &mut TcpStream, request: GetRequest) -> ClientR
         )));
     }
 
+    println!("response_bytes: {:?}", response_bytes);
+
     let decoded = decode::<GetResponse>(&response_bytes).map_err(|_| {
         ClientError::ConnectionError(std::io::Error::new(
             std::io::ErrorKind::InvalidData,
@@ -258,6 +287,8 @@ async fn request_set(
     tcp_stream.write(&request_packet).await?;
 
     let (response_tag, _) = fetch_all_packet(tcp_stream).await?;
+
+    println!("Response tag: {}", response_tag);
 
     if response_tag != protocol::SET_OK {
         return Err(ClientError::ConnectionError(std::io::Error::new(
@@ -310,29 +341,13 @@ async fn request_clear(tcp_stream: &mut TcpStream) -> ClientResult<()> {
     Ok(())
 }
 
-fn generate_packet(packet_type: u8, payload: &[u8]) -> Vec<u8> {
-    let mut packet = Vec::with_capacity(1 + 4 + payload.len());
-
-    // Add the packet type
-    packet.push(packet_type);
-
-    // Add the length tag
-    let length = payload.len() as u32;
-    packet.extend_from_slice(&length.to_be_bytes());
-
-    // Add the payload
-    packet.extend_from_slice(payload);
-
-    packet
-}
-
 async fn fetch_all_packet(tcp_stream: &mut TcpStream) -> ClientResult<(u8, Vec<u8>)> {
-    let mut packet_buffer = [0; PACKET_BYTE_LIMIT as usize];
+    let mut packet_buffer = [0; PAYLOAD_CHUNK_SIZE as usize];
 
-    let _ = tcp_stream.read(&mut packet_buffer).await?;
+    let first_read_count = tcp_stream.read(&mut packet_buffer).await?;
 
     let (length, tag, mut all_bytes) = {
-        let start_packet = parse_start_packet(&packet_buffer).ok_or(
+        let start_packet = parse_start_packet(&packet_buffer[..first_read_count]).ok_or(
             ClientError::ConnectionError(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 "Failed to parse start packet",
