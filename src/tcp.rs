@@ -86,7 +86,7 @@ async fn handle_stream(mut tcp_stream: TcpStream, mut engine: KVEngine) {
                     PING => {
                         log::debug!("Received PING");
 
-                        if let Err(error) = tcp_stream.write(&[PONG]).await {
+                        if let Err(error) = tcp_stream.write_all(&[PONG]).await {
                             log::error!("Failed to send PONG: {}", error);
                             continue;
                         }
@@ -101,7 +101,7 @@ async fn handle_stream(mut tcp_stream: TcpStream, mut engine: KVEngine) {
                             Some(packet) => {
                                 if packet.length > PACKET_BYTE_LIMIT {
                                     log::error!("packet size exceeds limit");
-                                    let _ = tcp_stream.write(&[PACKET_INVALID]).await;
+                                    let _ = tcp_stream.write_all(&[PACKET_INVALID]).await;
                                     continue;
                                 }
 
@@ -115,7 +115,7 @@ async fn handle_stream(mut tcp_stream: TcpStream, mut engine: KVEngine) {
                                 process_set(&mut tcp_stream, &mut engine, packet.value).await;
                             }
                             None => {
-                                let _ = tcp_stream.write(&[PACKET_INVALID]).await;
+                                let _ = tcp_stream.write_all(&[PACKET_INVALID]).await;
                             }
                         }
                     }
@@ -128,7 +128,7 @@ async fn handle_stream(mut tcp_stream: TcpStream, mut engine: KVEngine) {
                             Some(packet) => {
                                 if packet.length > PACKET_BYTE_LIMIT {
                                     log::error!("packet size exceeds limit");
-                                    let _ = tcp_stream.write(&[PACKET_INVALID]).await;
+                                    let _ = tcp_stream.write_all(&[PACKET_INVALID]).await;
                                     continue;
                                 }
 
@@ -142,7 +142,7 @@ async fn handle_stream(mut tcp_stream: TcpStream, mut engine: KVEngine) {
                                 process_get(&mut tcp_stream, &mut engine, packet.value).await;
                             }
                             None => {
-                                let _ = tcp_stream.write(&[PACKET_INVALID]).await;
+                                let _ = tcp_stream.write_all(&[PACKET_INVALID]).await;
                             }
                         }
                     }
@@ -155,7 +155,7 @@ async fn handle_stream(mut tcp_stream: TcpStream, mut engine: KVEngine) {
                             Some(packet) => {
                                 if packet.length > PACKET_BYTE_LIMIT {
                                     log::error!("packet size exceeds limit");
-                                    let _ = tcp_stream.write(&[PACKET_INVALID]).await;
+                                    let _ = tcp_stream.write_all(&[PACKET_INVALID]).await;
                                     continue;
                                 }
 
@@ -170,7 +170,7 @@ async fn handle_stream(mut tcp_stream: TcpStream, mut engine: KVEngine) {
                                 process_delete(&mut tcp_stream, &mut engine, packet.value).await;
                             }
                             None => {
-                                let _ = tcp_stream.write(&[PACKET_INVALID]).await;
+                                let _ = tcp_stream.write_all(&[PACKET_INVALID]).await;
                             }
                         }
                     }
@@ -179,7 +179,7 @@ async fn handle_stream(mut tcp_stream: TcpStream, mut engine: KVEngine) {
 
                         if let Err(error) = engine.clear_all() {
                             log::error!("Failed to clear all key-value pairs: {}", error);
-                            let _ = tcp_stream.write(&[ERROR]).await;
+                            let _ = tcp_stream.write_all(&[ERROR]).await;
                             continue;
                         }
 
@@ -268,7 +268,7 @@ pub async fn process_set(stream: &mut TcpStream, engine: &mut KVEngine, bytes: &
         Ok(set_request) => set_request,
         Err(error) => {
             log::error!("Failed to decode SetRequest: {}", error);
-            let _ = stream.write(&[PACKET_INVALID]).await;
+            let _ = stream.write_all(&[PACKET_INVALID]).await;
             return;
         }
     };
@@ -277,7 +277,7 @@ pub async fn process_set(stream: &mut TcpStream, engine: &mut KVEngine, bytes: &
     let value = set_request.value;
     if let Err(error) = engine.set_key_value(key, value) {
         log::error!("Failed to set key-value pair: {}", error);
-        let _ = stream.write(&[ERROR]).await;
+        let _ = stream.write_all(&[ERROR]).await;
     }
 
     // Send a response back to the client
@@ -291,7 +291,7 @@ pub async fn process_get(stream: &mut TcpStream, engine: &mut KVEngine, bytes: &
         Ok(get_request) => get_request,
         Err(error) => {
             log::error!("Failed to decode GetRequest: {}", error);
-            let _ = stream.write(&[PACKET_INVALID]).await;
+            let _ = stream.write_all(&[PACKET_INVALID]).await;
             return;
         }
     };
@@ -308,7 +308,7 @@ pub async fn process_get(stream: &mut TcpStream, engine: &mut KVEngine, bytes: &
         }
         Err(error) => {
             log::error!("Failed to get key-value pair: {}", error);
-            let _ = stream.write(&[ERROR]).await;
+            let _ = stream.write_all(&[ERROR]).await;
         }
     }
 }
@@ -320,7 +320,7 @@ pub async fn process_delete(stream: &mut TcpStream, engine: &mut KVEngine, bytes
         Ok(get_request) => get_request,
         Err(error) => {
             log::error!("Failed to decode GetRequest: {}", error);
-            let _ = stream.write(&[PACKET_INVALID]).await;
+            let _ = stream.write_all(&[PACKET_INVALID]).await;
             return;
         }
     };
@@ -328,7 +328,7 @@ pub async fn process_delete(stream: &mut TcpStream, engine: &mut KVEngine, bytes
     let key = get_request.key;
     if let Err(error) = engine.delete_key_value(&key) {
         log::error!("Failed to delete key-value pair: {}", error);
-        let _ = stream.write(&[ERROR]).await;
+        let _ = stream.write_all(&[ERROR]).await;
     }
 
     // Send a response back to the client
