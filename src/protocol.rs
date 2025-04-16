@@ -97,6 +97,7 @@ pub(crate) fn parse_start_packet(packet: &[u8]) -> Option<StartPacket<'_>> {
     Some(StartPacket { tag, length, value })
 }
 
+#[allow(dead_code)]
 pub(crate) fn generate_packet(packet_type: u8, payload: &[u8]) -> Vec<u8> {
     let mut packet = Vec::with_capacity(1 + 4 + payload.len());
 

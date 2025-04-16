@@ -18,11 +18,17 @@ pub enum KVError {
 
 pub type KVResult<T> = std::result::Result<T, KVError>;
 
-impl KVEngine {
-    pub fn new() -> Self {
+impl Default for KVEngine {
+    fn default() -> Self {
         KVEngine {
             kv: Arc::new(Mutex::new(HashMap::new())),
         }
+    }
+}
+
+impl KVEngine {
+    pub fn new() -> Self {
+        Default::default()
     }
 
     pub fn set_key_value(&self, key: String, value: String) -> KVResult<()> {
