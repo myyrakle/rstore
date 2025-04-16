@@ -264,6 +264,8 @@ async fn request_get(tcp_stream: &mut TcpStream, request: GetRequest) -> ClientR
         )));
     }
 
+    println!("response_bytes: {:?}", response_bytes);
+
     let decoded = decode::<GetResponse>(&response_bytes).map_err(|_| {
         ClientError::ConnectionError(std::io::Error::new(
             std::io::ErrorKind::InvalidData,

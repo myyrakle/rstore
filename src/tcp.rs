@@ -1,7 +1,7 @@
-use chorba::decode;
+use chorba::{decode, encode};
 use engine::KVEngine;
 use protocol::{
-    CLEAR, CLEAR_OK, DELETE, DELETE_OK, DeleteRequest, ERROR, GET, GET_OK, GetRequest,
+    CLEAR, CLEAR_OK, DELETE, DELETE_OK, DeleteRequest, ERROR, GET, GET_OK, GetRequest, GetResponse,
     PACKET_BYTE_LIMIT, PACKET_INVALID, PAYLOAD_CHUNK_SIZE, PAYLOAD_FIRST_MAX_VALUE_SIZE, PING,
     PONG, SET, SET_OK, SetRequest, generate_packet, parse_start_packet,
 };
@@ -300,7 +300,10 @@ pub async fn process_get(stream: &mut TcpStream, engine: &mut KVEngine, bytes: &
     match engine.get_key_value(&key) {
         Ok(value) => {
             // Send the value back to the client
-            let response = generate_packet(GET_OK, value.as_bytes());
+            let get_response = GetResponse { value };
+            let response_bytes = encode(&get_response);
+
+            let response = generate_packet(GET_OK, &response_bytes);
             let _ = stream.write_all(&response).await;
         }
         Err(error) => {
