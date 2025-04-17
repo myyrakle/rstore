@@ -4,14 +4,9 @@ use std::{
 };
 
 use chorba::{decode, encode};
-use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    net::TcpStream,
-};
+use tokio::{io::AsyncWriteExt, net::TcpStream};
 
-use crate::protocol::{
-    self, GetRequest, GetResponse, PAYLOAD_CHUNK_SIZE, generate_packet, parse_start_packet,
-};
+use crate::protocol::{self, GetRequest, GetResponse, generate_packet, read_all_from_stream};
 
 #[derive(Debug, thiserror::Error)]
 pub enum ClientError {
@@ -19,6 +14,8 @@ pub enum ClientError {
     ConnectionError(#[from] std::io::Error),
     #[error("Send request error")]
     SendRequestError(std::io::Error),
+    #[error("Packet error: {0}")]
+    PacketError(#[from] protocol::PacketError),
 }
 
 pub type ClientResult<T> = std::result::Result<T, ClientError>;
@@ -335,36 +332,7 @@ async fn request_clear(tcp_stream: &mut TcpStream) -> ClientResult<()> {
 }
 
 async fn fetch_all_packet(tcp_stream: &mut TcpStream) -> ClientResult<(u8, Vec<u8>)> {
-    let mut packet_buffer = [0; PAYLOAD_CHUNK_SIZE as usize];
+    let (tag, bytes) = read_all_from_stream(tcp_stream).await?;
 
-    let first_read_count = tcp_stream.read(&mut packet_buffer).await?;
-
-    let (length, tag, mut all_bytes) = {
-        let start_packet = parse_start_packet(&packet_buffer[..first_read_count]).ok_or(
-            ClientError::ConnectionError(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                "Failed to parse start packet",
-            )),
-        )?;
-
-        let length = start_packet.length;
-        let tag = start_packet.tag;
-
-        let mut all_bytes = start_packet.value.to_vec();
-        all_bytes.reserve(start_packet.length as usize);
-
-        (length, tag, all_bytes)
-    };
-
-    while length > all_bytes.len() as u32 {
-        let bytes_read = tcp_stream.read(&mut packet_buffer).await?;
-
-        if bytes_read == 0 {
-            break;
-        }
-
-        all_bytes.extend_from_slice(&packet_buffer[..bytes_read]);
-    }
-
-    Ok((tag, all_bytes))
+    Ok((tag, bytes))
 }

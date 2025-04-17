@@ -2,13 +2,10 @@ use chorba::{decode, encode};
 use engine::KVEngine;
 use protocol::{
     CLEAR, CLEAR_OK, DELETE, DELETE_OK, DeleteRequest, ERROR, GET, GET_OK, GetRequest, GetResponse,
-    PACKET_BYTE_LIMIT, PACKET_INVALID, PAYLOAD_CHUNK_SIZE, PAYLOAD_FIRST_MAX_VALUE_SIZE, PING,
-    PONG, SET, SET_OK, SetRequest, generate_packet, parse_start_packet,
+    PACKET_INVALID, PING, PONG, PacketError, SET, SET_OK, SetRequest, generate_packet,
+    read_all_from_stream,
 };
-use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    net::TcpStream,
-};
+use tokio::{io::AsyncWriteExt, net::TcpStream};
 
 mod engine;
 pub mod protocol;
@@ -39,223 +36,63 @@ async fn main() {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
-pub enum StreamStatus {
-    #[default]
-    NONE,
-    SET(u32),
-    GET(u32),
-    DELETE(u32),
-}
-
 async fn handle_stream(mut tcp_stream: TcpStream, mut engine: KVEngine) {
-    let mut read_buffer: [u8; PAYLOAD_CHUNK_SIZE as usize] = [0; PAYLOAD_CHUNK_SIZE as usize];
-
-    let mut state = StreamStatus::default();
-
-    let mut context_buffer: Vec<u8> = Vec::new();
-
     loop {
         // 3. 클라이언트로부터 패킷 수신
-        let stream_result = tcp_stream.read(&mut read_buffer).await;
-
-        // 4. ... 패킷을 읽어서 분석
-
-        let size = match stream_result {
-            Ok(size) => size,
+        let (tag, bytes) = match read_all_from_stream(&mut tcp_stream).await {
+            Ok(packet) => packet,
+            Err(PacketError::NoDataReceived) => {
+                log::debug!("No data received");
+                return;
+            }
             Err(error) => {
-                log::error!("Failed to read from socket: {}", error);
-                break;
+                log::error!("Failed to fetch packet: {}", error);
+                let _ = tcp_stream.write_all(&[PACKET_INVALID]).await;
+                continue;
             }
         };
 
-        let read_buffer = &read_buffer[..size];
+        match tag {
+            PING => {
+                log::debug!("Received PING");
 
-        match state {
-            StreamStatus::NONE => {
-                if size == 0 {
-                    log::debug!("No data received");
-                    return;
-                }
-
-                log::debug!("Received {:?} bytes", read_buffer);
-
-                let first_byte = read_buffer[0];
-
-                match first_byte {
-                    PING => {
-                        log::debug!("Received PING");
-
-                        if let Err(error) = tcp_stream.write_all(&[PONG]).await {
-                            log::error!("Failed to send PONG: {}", error);
-                            continue;
-                        }
-                    }
-                    SET => {
-                        log::debug!("Received SET");
-
-                        let start_packet = parse_start_packet(read_buffer);
-                        log::debug!("start packet: {:?}", start_packet);
-
-                        match start_packet {
-                            Some(packet) => {
-                                if packet.length > PACKET_BYTE_LIMIT {
-                                    log::error!("packet size exceeds limit");
-                                    let _ = tcp_stream.write_all(&[PACKET_INVALID]).await;
-                                    continue;
-                                }
-
-                                if packet.length > PAYLOAD_FIRST_MAX_VALUE_SIZE {
-                                    context_buffer.extend_from_slice(packet.value);
-                                    state = StreamStatus::SET(packet.length);
-
-                                    continue;
-                                }
-
-                                process_set(&mut tcp_stream, &mut engine, packet.value).await;
-                            }
-                            None => {
-                                let _ = tcp_stream.write_all(&[PACKET_INVALID]).await;
-                            }
-                        }
-                    }
-                    GET => {
-                        log::debug!("Received GET");
-
-                        let start_packet = parse_start_packet(read_buffer);
-
-                        match start_packet {
-                            Some(packet) => {
-                                if packet.length > PACKET_BYTE_LIMIT {
-                                    log::error!("packet size exceeds limit");
-                                    let _ = tcp_stream.write_all(&[PACKET_INVALID]).await;
-                                    continue;
-                                }
-
-                                if packet.length > PAYLOAD_FIRST_MAX_VALUE_SIZE {
-                                    context_buffer.extend_from_slice(packet.value);
-                                    state = StreamStatus::GET(packet.length);
-
-                                    continue;
-                                }
-
-                                process_get(&mut tcp_stream, &mut engine, packet.value).await;
-                            }
-                            None => {
-                                let _ = tcp_stream.write_all(&[PACKET_INVALID]).await;
-                            }
-                        }
-                    }
-                    DELETE => {
-                        log::debug!("Received DELETE");
-
-                        let start_packet = parse_start_packet(read_buffer);
-
-                        match start_packet {
-                            Some(packet) => {
-                                if packet.length > PACKET_BYTE_LIMIT {
-                                    log::error!("packet size exceeds limit");
-                                    let _ = tcp_stream.write_all(&[PACKET_INVALID]).await;
-                                    continue;
-                                }
-
-                                if packet.length > PAYLOAD_FIRST_MAX_VALUE_SIZE {
-                                    context_buffer.extend_from_slice(packet.value);
-                                    state = StreamStatus::DELETE(packet.length);
-
-                                    continue;
-                                }
-
-                                // Process the value
-                                process_delete(&mut tcp_stream, &mut engine, packet.value).await;
-                            }
-                            None => {
-                                let _ = tcp_stream.write_all(&[PACKET_INVALID]).await;
-                            }
-                        }
-                    }
-                    CLEAR => {
-                        log::debug!("Received CLEAR");
-
-                        if let Err(error) = engine.clear_all() {
-                            log::error!("Failed to clear all key-value pairs: {}", error);
-                            let _ = tcp_stream.write_all(&[ERROR]).await;
-                            continue;
-                        }
-
-                        // Send a response back to the client
-                        let _ = tcp_stream.write_all(&[CLEAR_OK]).await;
-                    }
-                    _ => {
-                        log::error!("Unknown command: {}", first_byte);
-                    }
+                if let Err(error) = tcp_stream.write_all(&[PONG]).await {
+                    log::error!("Failed to send PONG: {}", error);
+                    continue;
                 }
             }
-            StreamStatus::SET(length) => {
-                log::debug!("Stream status: SET");
+            SET => {
+                log::debug!("Received SET");
 
-                if read_buffer.is_empty() {
-                    log::debug!("No data received");
-                    state = StreamStatus::NONE;
+                process_set(&mut tcp_stream, &mut engine, &bytes).await;
+            }
+            GET => {
+                log::debug!("Received GET");
 
+                process_get(&mut tcp_stream, &mut engine, &bytes).await;
+            }
+            DELETE => {
+                log::debug!("Received DELETE");
+
+                process_delete(&mut tcp_stream, &mut engine, &bytes).await;
+            }
+            CLEAR => {
+                log::debug!("Received CLEAR");
+
+                if let Err(error) = engine.clear_all() {
+                    log::error!("Failed to clear all key-value pairs: {}", error);
+                    let _ = tcp_stream.write_all(&[ERROR]).await;
                     continue;
                 }
 
-                context_buffer.extend_from_slice(read_buffer);
-
-                if context_buffer.len() as u32 >= length {
-                    // Process the value
-                    process_set(&mut tcp_stream, &mut engine, &context_buffer).await;
-
-                    // Reset state
-                    state = StreamStatus::NONE;
-                } else {
-                    log::debug!("Waiting for more data...");
-                }
+                // Send a response back to the client
+                let _ = tcp_stream.write_all(&[CLEAR_OK]).await;
             }
-            StreamStatus::GET(_) => {
-                log::debug!("Stream status: GET");
+            _ => {
+                log::error!("Unknown command: {}", tag);
 
-                if read_buffer.is_empty() {
-                    log::debug!("No data received");
-                    state = StreamStatus::NONE;
-
-                    continue;
-                }
-
-                context_buffer.extend_from_slice(read_buffer);
-
-                if context_buffer.len() as u32 >= PAYLOAD_FIRST_MAX_VALUE_SIZE {
-                    // Process the value
-                    process_get(&mut tcp_stream, &mut engine, &context_buffer).await;
-
-                    // Reset state
-                    state = StreamStatus::NONE;
-                } else {
-                    log::debug!("Waiting for more data...");
-                }
-            }
-            StreamStatus::DELETE(_) => {
-                log::debug!("Stream status: DELETE");
-
-                if read_buffer.is_empty() {
-                    log::debug!("No data received");
-                    state = StreamStatus::NONE;
-
-                    continue;
-                }
-
-                context_buffer.extend_from_slice(read_buffer);
-
-                if context_buffer.len() as u32 >= PAYLOAD_FIRST_MAX_VALUE_SIZE {
-                    // Process the value
-                    process_delete(&mut tcp_stream, &mut engine, &context_buffer).await;
-
-                    // Reset state
-                    state = StreamStatus::NONE;
-                } else {
-                    log::debug!("Waiting for more data...");
-                }
+                let _ = tcp_stream.write_all(&[PACKET_INVALID]).await;
+                continue;
             }
         }
     }
