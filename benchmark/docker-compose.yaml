@@ -10,9 +10,21 @@ services:
           memory: 1024M
 
   rstore:
-    image: myyrakle/store 
+    image: myyrakle/rstore:http-0.1.0
+    container_name: rstore-http
     ports:
       - "13535:13535"
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1024M
+
+  rstore-tcp:
+    image: myyrakle/rstore:tcp-0.1.0
+    container_name: rstore-tcp
+    ports:
+      - "13536:13535"
     deploy:
       resources:
         limits:

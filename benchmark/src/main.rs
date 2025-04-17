@@ -1,10 +1,10 @@
 use std::thread;
 
 use redis::RedisClient;
-use rstore::RStoreClient;
 
 pub mod redis;
-pub mod rstore;
+pub mod rstore_http;
+pub mod rstore_tcp;
 
 pub trait KeyValueStore {
     fn set_key_value(&mut self, key: &str, value: &str) -> anyhow::Result<()>;
@@ -145,8 +145,8 @@ fn benchmark_redis() {
     }
 }
 
-fn benchmark_rstore() {
-    let mut client = RStoreClient::new().unwrap();
+fn benchmark_rstore_http() {
+    let mut client = rstore_http::RStoreClient::new().unwrap();
 
     client.clear_all().unwrap();
     thread::sleep(std::time::Duration::from_secs(1));
@@ -165,7 +165,28 @@ fn benchmark_rstore() {
     }
 }
 
-fn main() {
+fn benchmark_rstore_tcp() {
+    let mut client = rstore_tcp::RStoreClient::new().unwrap();
+
+    client.clear_all().unwrap();
+    thread::sleep(std::time::Duration::from_secs(1));
+
+    // Case 1
+    {
+        case_1(&mut client);
+    }
+
+    thread::sleep(std::time::Duration::from_secs(1));
+    client.clear_all().unwrap();
+
+    // Case 2
+    {
+        case_2(&mut client);
+    }
+}
+
+#[tokio::main]
+async fn main() {
     println!("------------------------------");
     println!("Benchmarking Redis...");
     benchmark_redis();
@@ -176,8 +197,20 @@ fn main() {
     println!("");
 
     println!("------------------------------");
-    println!("Benchmarking RStore...");
-    benchmark_rstore();
-    println!("Benchmarking RStore completed.");
+    println!("Benchmarking RStore HTTP...");
+    benchmark_rstore_http();
+    println!("Benchmarking RStore HTTP completed.");
     println!("------------------------------");
+
+    println!("");
+    println!("");
+
+    println!("------------------------------");
+    println!("Benchmarking RStore TCP...");
+    benchmark_rstore_tcp();
+    println!("Benchmarking RStore TCP completed.");
+    println!("------------------------------");
+
+    println!("");
+    println!("All benchmarks completed.");
 }
