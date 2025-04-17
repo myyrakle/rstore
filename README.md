@@ -1,6 +1,6 @@
 # rstore
 
-![](https://img.shields.io/badge/language-Rust-red) ![](https://img.shields.io/badge/version-0.1.0%20alpha-brightgreen) [![GitHub license](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/myyrakle/rstore/blob/master/LICENSE)
+![](https://img.shields.io/badge/language-Rust-red) ![](https://img.shields.io/badge/version-0.1.1%20alpha-brightgreen) [![GitHub license](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/myyrakle/rstore/blob/master/LICENSE)
 
 - simple Key-Value in-memory store
 - HTTP or TCP server
@@ -20,7 +20,7 @@ cargo run --bin http
 run server
 
 ```bash
-sudo docker run -p 13535:13535 myyrakle/rstore:http-0.1.0
+sudo docker run -p 13535:13535 myyrakle/rstore:http-0.1.1
 ```
 
 ping
@@ -60,7 +60,7 @@ curl -X DELETE http://localhost:13535/clear
 run server
 
 ```bash
-sudo docker run -p 13535:13535 myyrakle/rstore:tcp-0.1.0
+sudo docker run -p 13535:13535 myyrakle/rstore:tcp-0.1.1
 ```
 
 client code
