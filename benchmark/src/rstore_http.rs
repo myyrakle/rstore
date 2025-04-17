@@ -18,8 +18,9 @@ impl RStoreClient {
     }
 }
 
+#[async_trait::async_trait]
 impl KeyValueStore for RStoreClient {
-    fn set_key_value(&mut self, key: &str, value: &str) -> anyhow::Result<()> {
+    async fn set_key_value(&mut self, key: &str, value: &str) -> anyhow::Result<()> {
         let request_body = format!("{{\"key\": \"{}\", \"value\": \"{}\"}}", key, value);
 
         self.client
@@ -31,7 +32,7 @@ impl KeyValueStore for RStoreClient {
         Ok(())
     }
 
-    fn get_key_value(&mut self, key: &str) -> anyhow::Result<String> {
+    async fn get_key_value(&mut self, key: &str) -> anyhow::Result<String> {
         let response = self
             .client
             .get(format!("http://localhost:13535/value?key={key}"))
@@ -45,7 +46,7 @@ impl KeyValueStore for RStoreClient {
         Ok(value)
     }
 
-    fn clear_all(&mut self) -> anyhow::Result<()> {
+    async fn clear_all(&mut self) -> anyhow::Result<()> {
         self.client.delete("http://localhost:13535/clear").send()?;
 
         Ok(())

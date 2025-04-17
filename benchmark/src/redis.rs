@@ -36,21 +36,22 @@ impl RedisClient {
     }
 }
 
+#[async_trait::async_trait]
 impl KeyValueStore for RedisClient {
-    fn set_key_value(&mut self, key: &str, value: &str) -> anyhow::Result<()> {
+    async fn set_key_value(&mut self, key: &str, value: &str) -> anyhow::Result<()> {
         // set key value
         let _: () = self.connection.set(key, value)?;
 
         Ok(())
     }
 
-    fn get_key_value(&mut self, key: &str) -> anyhow::Result<String> {
+    async fn get_key_value(&mut self, key: &str) -> anyhow::Result<String> {
         let value: String = self.connection.get(key)?;
 
         Ok(value)
     }
 
-    fn clear_all(&mut self) -> anyhow::Result<()> {
+    async fn clear_all(&mut self) -> anyhow::Result<()> {
         // clear all
         let all_keys: Vec<String> = self.connection.keys("*")?;
         for key in all_keys {

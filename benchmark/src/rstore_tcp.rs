@@ -25,26 +25,32 @@ impl RStoreClient {
     }
 }
 
+#[async_trait::async_trait]
 impl KeyValueStore for RStoreClient {
-    fn set_key_value(&mut self, key: &str, value: &str) -> anyhow::Result<()> {
-        block_on(self.client.set(SetRequest {
-            key: key.to_string(),
-            value: value.to_string(),
-        }))?;
+    async fn set_key_value(&mut self, key: &str, value: &str) -> anyhow::Result<()> {
+        self.client
+            .set(SetRequest {
+                key: key.to_string(),
+                value: value.to_string(),
+            })
+            .await?;
 
         Ok(())
     }
 
-    fn get_key_value(&mut self, key: &str) -> anyhow::Result<String> {
-        let response = block_on(self.client.get(GetRequest {
-            key: key.to_string(),
-        }))?;
+    async fn get_key_value(&mut self, key: &str) -> anyhow::Result<String> {
+        let response = self
+            .client
+            .get(GetRequest {
+                key: key.to_string(),
+            })
+            .await?;
 
         Ok(response.value)
     }
 
-    fn clear_all(&mut self) -> anyhow::Result<()> {
-        block_on(self.client.clear())?;
+    async fn clear_all(&mut self) -> anyhow::Result<()> {
+        self.client.clear().await?;
 
         Ok(())
     }
