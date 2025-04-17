@@ -1,4 +1,5 @@
 use chorba::{Decode, Encode};
+use tokio::{io::AsyncReadExt, net::TcpStream};
 
 // Redis - 512MB (Key, Value)
 // Memcached - 1MB (Key, Value)
@@ -65,16 +66,26 @@ pub struct StartPacket<'a> {
     pub value: &'a [u8],
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum PacketError {
+    #[error("Tag is empty")]
+    EmptyTag,
+    #[error("Read failed")]
+    ReadFailed(#[from] std::io::Error),
+    #[error("No Data received")]
+    NoDataReceived,
+}
+
 #[allow(dead_code)]
-pub(crate) fn parse_start_packet(packet: &[u8]) -> Option<StartPacket<'_>> {
+pub(crate) fn parse_start_packet(packet: &[u8]) -> Result<StartPacket<'_>, PacketError> {
     if packet.is_empty() {
-        return None;
+        return Err(PacketError::EmptyTag);
     }
 
     let tag = packet[0];
 
     if packet.len() < 5 {
-        return Some(StartPacket {
+        return Ok(StartPacket {
             tag,
             length: 0,
             value: packet,
@@ -84,7 +95,7 @@ pub(crate) fn parse_start_packet(packet: &[u8]) -> Option<StartPacket<'_>> {
     let tag = packet[0];
 
     if NO_VALUE_TAGS.contains(&tag) {
-        return Some(StartPacket {
+        return Ok(StartPacket {
             tag,
             length: 0,
             value: packet,
@@ -94,7 +105,7 @@ pub(crate) fn parse_start_packet(packet: &[u8]) -> Option<StartPacket<'_>> {
     let length = u32::from_be_bytes([packet[1], packet[2], packet[3], packet[4]]);
     let value = &packet[5..];
 
-    Some(StartPacket { tag, length, value })
+    Ok(StartPacket { tag, length, value })
 }
 
 #[allow(dead_code)]
@@ -112,4 +123,41 @@ pub(crate) fn generate_packet(packet_type: u8, payload: &[u8]) -> Vec<u8> {
     packet.extend_from_slice(payload);
 
     packet
+}
+
+#[allow(dead_code)]
+pub(crate) async fn read_all_from_stream(
+    tcp_stream: &mut TcpStream,
+) -> Result<(u8, Vec<u8>), PacketError> {
+    let mut packet_buffer = [0; PAYLOAD_CHUNK_SIZE as usize];
+
+    let first_read_count = tcp_stream.read(&mut packet_buffer).await?;
+
+    if first_read_count == 0 {
+        return Err(PacketError::NoDataReceived);
+    }
+
+    let (length, tag, mut all_bytes) = {
+        let start_packet = parse_start_packet(&packet_buffer[..first_read_count])?;
+
+        let length = start_packet.length;
+        let tag = start_packet.tag;
+
+        let mut all_bytes = start_packet.value.to_vec();
+        all_bytes.reserve(start_packet.length as usize);
+
+        (length, tag, all_bytes)
+    };
+
+    while length > all_bytes.len() as u32 {
+        let bytes_read = tcp_stream.read(&mut packet_buffer).await?;
+
+        if bytes_read == 0 {
+            break;
+        }
+
+        all_bytes.extend_from_slice(&packet_buffer[..bytes_read]);
+    }
+
+    Ok((tag, all_bytes))
 }
