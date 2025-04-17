@@ -15,7 +15,7 @@ impl RStoreClient {
     pub fn new() -> anyhow::Result<RStoreClient> {
         let client = rstore::client::RStoreClient::new(ConnectionConfig {
             host: "localhost".to_string(),
-            port: 13535,
+            port: 13536,
             ..Default::default()
         });
 

@@ -1,4 +1,4 @@
-use reqwest::blocking::Client;
+use reqwest::Client;
 
 use crate::KeyValueStore;
 
@@ -11,8 +11,8 @@ impl RStoreClient {
     pub fn new() -> anyhow::Result<RStoreClient> {
         let client = Client::new();
 
-        // Check if the server is running
-        client.get("http://localhost:13535/").send()?;
+        // // Check if the server is running
+        // client.get("http://localhost:13535/").send().await?;
 
         Ok(RStoreClient { client })
     }
@@ -27,7 +27,8 @@ impl KeyValueStore for RStoreClient {
             .post("http://localhost:13535/value")
             .header("Content-Type", "application/json")
             .body(request_body)
-            .send()?;
+            .send()
+            .await?;
 
         Ok(())
     }
@@ -36,9 +37,10 @@ impl KeyValueStore for RStoreClient {
         let response = self
             .client
             .get(format!("http://localhost:13535/value?key={key}"))
-            .send()?;
+            .send()
+            .await?;
 
-        let response_body = response.text()?;
+        let response_body = response.text().await?;
 
         let response: RStoreGetResponse = serde_json::from_str(&response_body)?;
         let value = response.value;
@@ -47,7 +49,10 @@ impl KeyValueStore for RStoreClient {
     }
 
     async fn clear_all(&mut self) -> anyhow::Result<()> {
-        self.client.delete("http://localhost:13535/clear").send()?;
+        self.client
+            .delete("http://localhost:13535/clear")
+            .send()
+            .await?;
 
         Ok(())
     }
